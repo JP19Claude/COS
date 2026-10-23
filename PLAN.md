@@ -8,7 +8,7 @@ Alle Werte stehen in [`DESIGN_SPEC.md`](DESIGN_SPEC.md) und [`MOTION_TOKENS.md`]
 
 | # | Blocker | Folge | Was hilft |
 |---|---|---|---|
-| 1 | `reference/` ist leer (0 von 109 erwarteten Dateien) | Keine Messwerte. Alle Gerüste stehen auf `TODO: Referenz nötig` | Material laut [`reference/INDEX.md`](reference/INDEX.md), zuerst das ★-Set (28 Dateien) |
+| 1 | `reference/` ist leer (0 von 109 Einträgen, gut 120 Dateien) | Keine Messwerte. Alle Gerüste stehen auf `TODO: Referenz nötig` | Material laut [`reference/INDEX.md`](reference/INDEX.md), zuerst das ★-Set (28 Dateien) |
 | 2 | Gerät und ColorOS-17-Build unbekannt | dp-Umrechnung und Versionsstand offen | Kopfzeilen in `reference/INDEX.md` |
 | 3 | Die Netzwerk-Richtlinie dieser Cloud-Umgebung sperrt `dl.google.com`. Erreichbar sind `maven.google.com` und Maven Central | Android SDK nicht installierbar, hier kein APK-Build | `dl.google.com` unter *Network access → Allowed domains* freigeben. Sonst Builds nur über GitHub Actions |
 | 4 | Kein KVM im Container | Kein Emulator hier | Screenshots und Frame-Strips per Roborazzi (JVM). Emulator-Läufe eventuell in GitHub Actions ⚠. Performance und Haptik misst du auf dem Gerät |
@@ -134,7 +134,7 @@ Prototypen laut `LIMITATIONS.md`: Accessibility-Overlay, `NotificationListenerSe
 | Leistung vieler Glas-Ebenen | Ruckeln bei 120 Hz | Einmal blurren und teilen, herunterskalierte Ebenen, Messung per Macrobenchmark |
 | Robolectric rendert Glas anders als ein Gerät | Diff für Glas unzuverlässig | Geometrie per Robolectric, Glas per Geräteaufnahme |
 | Kein Gerät im Container | Performance und Haptik hier nicht prüfbar | Skripte für dein Gerät, du schickst die Ergebnisse |
-| Umfang des Referenzmaterials (109 Dateien) | Hoher Aufwand für dich | Nach Phasen liefern, jeweils nur das nächste Set |
+| Umfang des Referenzmaterials (109 Einträge, gut 120 Dateien) | Hoher Aufwand für dich | Nach Phasen liefern, jeweils nur das nächste Set |
 | Rechtliches | Original-UI ist geschützt | Keine Assets, keine Marken, Referenz nur privat, nie in der APK |
 
 ## Was ich als Nächstes brauche
