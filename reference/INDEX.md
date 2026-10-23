@@ -1,6 +1,6 @@
 # Referenz-Index
 
-> **Status (2026-10-23): leer.** Es liegt noch kein Material vor, alle neun Ordner fehlen vollständig. Aufnahme-Regeln: [`README.md`](README.md).
+> **Status (2026-10-23): leer.** Es liegt noch kein Material vor, alle neun Ordner fehlen vollständig. Aufnahme-Regeln: [`README.md`](README.md). Abhak-Liste für den Start: [`CHECKLISTE.md`](../CHECKLISTE.md).
 
 ## Gerät
 
