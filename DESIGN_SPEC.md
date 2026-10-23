@@ -3,11 +3,17 @@
 Gemessene Gestaltungs-, Bewegungs- und Haptikwerte für den Nachbau. Der Code liest Werte nur aus Token-Dateien, die aus dieser Spec befüllt werden.
 
 > **Status (2026-10-23): Gerüst (Phase 0).** `reference/` enthält noch kein Material. Deshalb ist jeder Wert `TODO: Referenz nötig`. Nichts ist geschätzt.
+> Es gibt kein eigenes ColorOS-17-Gerät. Gemessen wird deshalb an öffentlichem Material ([`reference/QUELLEN.md`](reference/QUELLEN.md), Methode in §1a).
 > Was fehlt, steht konkret pro Ordner in [`reference/INDEX.md`](reference/INDEX.md). Die Bewegungswerte stehen ausführlich in [`MOTION_TOKENS.md`](MOTION_TOKENS.md).
 
 ## Konventionen
 
 - **Quelle:** `ordner/datei.mp4#f120-f164` für Frames, `ordner/datei.png@(x,y)` oder `@(x,y,b,h)` für Pixel bzw. Box. Ein Wert ohne Quelle gilt als nicht gemessen.
+- **Herkunft:** Jeder eingetragene Wert trägt eine Marke.
+  - `[öffentlich ±u]`: gemessen an öffentlichem Material, mit Unsicherheit u (z. B. `[öffentlich ±1,5 dp]`).
+  - `[geschätzt]`: Das Material reicht nicht, der Wert ist von mir festgelegt. Er bleibt in der „Offen“-Liste und wird nie als gemessen ausgegeben.
+  - `[Gerät]`: gemessen an eigener Aufnahme eines ColorOS-17-Geräts. Derzeit gibt es keine.
+  - `TODO: Referenz nötig`: noch kein Wert.
 - **Einheiten:** dp, sp, ms. Farben als `#RRGGBB @ α %`.
 - **Hell/Dunkel** werden getrennt erfasst. Bei Flächen mit Blur steht das Wallpaper dabei, über dem gemessen wurde.
 - **Hypothesen** aus öffentlichen Berichten (§3) gelten erst nach Prüfung an der Referenz. Abweichungen stehen dort in der Spalte „Befund“.
@@ -27,11 +33,33 @@ Gemessene Gestaltungs-, Bewegungs- und Haptikwerte für den Nachbau. Der Code li
 6. **Gesten:** Aufnahmen entstehen mit „Berührungen anzeigen“. Fingerpunkt und Inhaltsposition pro Frame ergeben den Mitlauffaktor, die Rubber-Band-Kurve und die Freigabe-Geschwindigkeit.
 7. **Hin und zurück getrennt:** Öffnen und Schließen werden getrennt gemessen und nie gespiegelt angenommen.
 
+## 1a. Messung an öffentlichem Material (aktueller Weg)
+
+Ohne eigenes Gerät ändern sich diese Schritte des Protokolls:
+
+- **Maßstab (zu Schritt 2):**
+  - Displaydichte und Anzeigegröße der Geräte im Material sind unbekannt. Gemessen werden deshalb Proportionen zur Bildschirmbreite in px.
+  - Daraus wird mit einer einzigen Bezugsbreite `W_dp` umgerechnet: `dp = px / Bildbreite_px × W_dp`.
+  - `W_dp` ist `[geschätzt]` und gilt für alle Werte gemeinsam. Proportionen bleiben damit exakt, nur der Gesamtmaßstab ist geschätzt.
+  - Material verschiedener Geräte wird nicht gemischt, ohne die Abweichung zu notieren.
+- **Zeit (zu Schritt 3):**
+  - Online-Videos haben meist höchstens 60 fps. Die Dauer ist damit auf ±1 Quell-Frame genau (±17 ms bei 60 fps, ±33 ms bei 30 fps). Die Bildrate jedes Videos kommt in `reference/INDEX.md`.
+  - Neu kodierte Videos können Frames doppeln oder auslassen. Doppelte Frames werden vor dem Fit erkannt und entfernt.
+- **Farben (zu Schritt 4):**
+  - JPEG- und Video-Kompression verfälschen Farben. Die Unsicherheit wird als ΔE-Bereich angegeben, und PNG-Material hat Vorrang.
+  - Ohne Kalibrier-Wallpaper bleiben Alpha und Tint von Glasflächen nur eingegrenzt. Sie werden über Bereiche mit bekannt hellem oder dunklem Hintergrund bestimmt.
+- **Blur (zu Schritt 5):** gemessen an Textkanten und Icon-Konturen hinter dem Glas, wie im Protokoll vorgesehen.
+- **Gesten (zu Schritt 6):**
+  - In öffentlichen Aufnahmen ist der Finger nicht sichtbar. Dauer und Kurve nach dem Loslassen sind messbar.
+  - Mitlauffaktor, Schwellen und Rubber-Band sind meist `[geschätzt]`. Ausnahme sind Videos, die den Finger zeigen und gerade von vorne aufgenommen sind.
+- **Haptik:** Sie kommt nur aus Beschreibungen in Testberichten und ist immer `[geschätzt]`.
+
 ## 2. Meta
 
 | Feld | Wert | Quelle |
 |---|---|---|
-| Gerät | TODO: Referenz nötig | `reference/INDEX.md` |
+| Gerät | je Quelle verschieden (kein eigenes Gerät) | `reference/INDEX.md` |
+| Bezugsbreite `W_dp` (§1a) | TODO: Referenz nötig | |
 | ColorOS-Build | TODO: Referenz nötig | |
 | Android-Version | TODO: Referenz nötig | |
 | Auflösung (px) | TODO: Referenz nötig | |
@@ -47,7 +75,7 @@ Dies ist eine Checkliste und keine gemessene Wahrheit. Was die Referenz anders z
 
 | # | Hypothese | Betrifft | Prüfen mit | Befund |
 |---|---|---|---|---|
-| H1 | „Fluid Design“: Frosted-Glass-Flächen, stark gerundete Ecken, Echtzeit-Beleuchtung/Lichtkanten, kräftiger Blur, Flux-Themes | alle | `control-center/cc_checker.png`, `home/home_checker.png`, `home/folder_open_*.png` | offen |
+| H1 | „Fluid Design“ (in Berichten auch „Living Flow Design“ oder „Flow“): Frosted-Glass-Flächen, stark gerundete Ecken, Echtzeit-Beleuchtung/Lichtkanten, kräftiger Blur, Flux-Themes | alle | `control-center/cc_*.png`, `home/home_*.png`, `home/folder_open_*.png` | offen |
 | H2 | Transparente, kapselförmige, schwebende Navigationsleiste in System-Apps (Telefon, Notizen, Rekorder) | §11 | `nav/capsule_*.png`, `nav/capsule_transition.mp4` | offen |
 | H3 | „Fluid Fusion“: federnd, physikbasiert, Animationen starten am Berührungspunkt und kehren dorthin zurück. „Seamless Animation“ ab ColorOS 16 bleibt | Motion | `app-transitions/*`, `control-center/cc_open_*.mp4` | offen |
 | H4 | Kontrollzentrum: komplett runde Kacheln, anpassbares Raster (4×4-Bereich oben), Kacheln verschiebbar und skalierbar, Medienkarte, Geräte-Panel, optional Multicolor | §7 | `control-center/*` | offen |
@@ -55,6 +83,17 @@ Dies ist eine Checkliste und keine gemessene Wahrheit. Was die Referenz anders z
 | H6 | Lockscreen: transparentes Uhr-Widget, Live Clock, durchgehender Wallpaper-Übergang AOD→Lock→Home, Vollbild-AOD, mehrere Widgets, Island (Pille, ziehbar), Licht-und-Schatten-Animationen | §5 | `lockscreen/*` | offen |
 | H7 | Schwebende Island-Benachrichtigungen, gestapelte Einzelkarten statt einer großen Fläche | §6 | `statusbar-shade/*` | offen |
 | H8 | Contour-Glow: dezentes Schimmern um Kacheln, Ordner, Suchleiste, Widgets, abschaltbar | §7, §8 | `home/contour_glow.mp4`, `home/glow_off.png` | offen |
+
+Diese Ergänzungen stammen aus Testberichten (Websuche vom 2026-10-23, Links in [`reference/QUELLEN.md`](reference/QUELLEN.md)):
+
+| # | Hypothese | Betrifft | Prüfen mit | Befund |
+|---|---|---|---|---|
+| H9 | Die Lockscreen-Uhr wird beim Entsperren nicht aus- und eingeblendet. Sie wandert mit Position und Größe in den Homescreen und reagiert schon beim Berühren des Fingerabdrucksensors (91mobiles, Design Compass) | §5 | `lockscreen/aod_lock_home.mp4`, `lockscreen/auth_fingerprint.mp4` | offen |
+| H10 | Die Lockscreen-Uhr lässt sich per Long-Press skalieren und frei verschieben. Bei eintreffenden Benachrichtigungen schrumpft sie stufenweise. Benachrichtigungen lassen sich gestapelt oder als Liste anzeigen (Hands-on-Berichte) | §5 | `lockscreen/notifications.png`, `lockscreen/notification_arrive.mp4` | offen |
+| H11 | Buttons und Auswahlflächen werden beim Drücken gestaucht. Beim Ziehen dehnen sich Elemente in Bewegungsrichtung. Bei festem Druck strecken sie sich leicht und federn dann zurück (Design Compass, Digit) | Motion, §7, §13 | `control-center/cc_press_hold.mp4`, `system-panels/*.mp4` | offen |
+| H12 | Quick-Settings, Live Alerts, Drei-Punkte-Menüs und Overlay-Buttons leuchten bei Interaktion auf (91mobiles) | §6, §7, §13 | `control-center/cc_toggle.mp4` | offen |
+| H13 | Morphing-Seitenübergänge in Einstellungen, Fotos, Notizen und Rekorder (Digit) | §12, §13 | `system-panels/settings_scroll.mp4`, `app-transitions/*` | offen |
+| H14 | „Fluid Fusion“ erweitert auf Lockscreen Island, ein seitlich wischbares Benachrichtigungs-Panel, die App-Suche und die schwebende Navigationsleiste. Die Suche öffnet mit einem federnden Ausdehnen und Zusammenziehen (Berichte zur Vorstellung) | §5, §6, §9, §11 | `lockscreen/island_expand.mp4`, `statusbar-shade/shade_zones.mp4`, `drawer-search/search.mp4`, `nav/capsule_transition.mp4` | offen |
 
 ## 4. Fundament (Zusammenfassung)
 
@@ -130,7 +169,7 @@ Alle Icons sind selbst gezeichnet. Fremde Open-Source-Icons kommen nur mit Eintr
 
 ### 4.8 Haptik (Aktion → Typ)
 
-Haptik lässt sich nicht aufnehmen. Grundlage ist deine Beschreibung in `system-panels/haptics.md`.
+Haptik lässt sich nicht aufnehmen, und es gibt kein eigenes Gerät. Grundlage sind Beschreibungen in Testberichten, deshalb ist jeder Wert `[geschätzt]`. Abgeglichen wird nach deinem Eindruck auf den Testgeräten.
 
 | Aktion | Wahrnehmung | Android-Abbildung | Quelle |
 |---|---|---|---|

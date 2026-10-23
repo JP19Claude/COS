@@ -8,10 +8,12 @@ Alle Werte stehen in [`DESIGN_SPEC.md`](DESIGN_SPEC.md) und [`MOTION_TOKENS.md`]
 
 | # | Blocker | Folge | Was hilft |
 |---|---|---|---|
-| 1 | `reference/` ist leer (0 von 109 Einträgen, gut 120 Dateien) | Keine Messwerte. Alle Gerüste stehen auf `TODO: Referenz nötig` | Material laut [`reference/INDEX.md`](reference/INDEX.md), zuerst das ★-Set (28 Dateien) |
-| 2 | Gerät und ColorOS-17-Build unbekannt | dp-Umrechnung und Versionsstand offen | Kopfzeilen in `reference/INDEX.md` |
+| 1 | `reference/` ist leer (0 von 109 Einträgen, gut 120 Dateien) | Keine Messwerte. Alle Gerüste stehen auf `TODO: Referenz nötig` | Öffentliches Material laut [`CHECKLISTE.md`](CHECKLISTE.md) und [`reference/QUELLEN.md`](reference/QUELLEN.md), zuerst das ★-Set (25 Dateien) |
+| 2 | Kein ColorOS-17-Gerät vorhanden (Entscheidung 2026-10-23: öffentliches Material) | Unbekannte Displaydichte und Kompression, Gesten ohne sichtbaren Finger, keine Haptik, keine Kalibrier-Aufnahmen | Proportionale Messung mit einer geschätzten Bezugsbreite (`DESIGN_SPEC.md` §1a). Jeder Wert wird als `[öffentlich ±u]` oder `[geschätzt]` markiert |
 | 3 | Die Netzwerk-Richtlinie dieser Cloud-Umgebung sperrt `dl.google.com`. Erreichbar sind `maven.google.com` und Maven Central | Android SDK nicht installierbar, hier kein APK-Build | `dl.google.com` unter *Network access → Allowed domains* freigeben. Sonst Builds nur über GitHub Actions |
-| 4 | Kein KVM im Container | Kein Emulator hier | Screenshots und Frame-Strips per Roborazzi (JVM). Emulator-Läufe eventuell in GitHub Actions ⚠. Performance und Haptik misst du auf dem Gerät |
+| 4 | Kein KVM im Container | Kein Emulator hier | Screenshots und Frame-Strips per Roborazzi (JVM). Emulator-Läufe eventuell in GitHub Actions ⚠. Performance und Haptik misst du auf den Testgeräten |
+
+**Testgeräte:** Samsung Galaxy S22 Ultra und Galaxy S25 FE. Beide liegen über Min SDK 29. Mit Android 12 und neuer läuft dort echter Blur, mit Android 13 und neuer auch AGSL. Sie dienen für Installation, Performance, Gesten und Haptik. Als Design-Referenz dienen sie nicht. Herstellerabhängige ⚠-Punkte aus `LIMITATIONS.md` werden auf One UI geprüft, nicht auf ColorOS.
 
 ## Architektur
 
@@ -51,15 +53,16 @@ tools/            Python: Frame-Extraktion, Frame-Strips, Kurven-Fit, Pixel-/ΔE
   - Schwellen, Rubber-Band und Snap-Ziele sind reines Kotlin mit JVM-Unit-Tests.
 - **Durchgehender Wallpaper-Übergang:** Eine gemeinsame Fortschrittsvariable steuert AOD → Lockscreen → Homescreen (Skalierung, Blur, Helligkeit, Position). Lockscreen und Launcher lesen sie beide, so bleibt es eine kontinuierliche Animation.
 - **Pixelvergleich (`DIFF_REPORT.md`):**
-  - Roborazzi rendert jeden Zustand in der Auflösung und dpi des Referenzgeräts.
+  - Roborazzi rendert jeden Zustand in einer Größe, die zur Bildbreite des Referenzbilds und zur Bezugsbreite `W_dp` passt.
   - App-seitig kommen die Element-Rahmen exakt aus Compose-`testTag`-Bounds, referenzseitig werden sie einmal pro Screen in JSON annotiert.
   - Der Report nennt Abweichungen in dp und ΔE (CIEDE2000) außerhalb von Blur-Flächen. Ziele: < 2 dp, ΔE < 3.
+  - Gemessen wird gegen öffentliches Material. Jede Abweichung steht deshalb neben der Mess-Unsicherheit der Quelle. Liegt die Unsicherheit über dem Ziel, heißt das Ergebnis „nicht prüfbar“ und nicht „bestanden“.
 - **Animationsvergleich (`MOTION_REPORT.md`):**
   - Die Compose-Testuhr wird in Schritten von 1/fps weitergeschaltet. Das liefert deterministische Frame-Strips der App.
-  - Gesten werden mit der Fingerbahn aus der Referenz („Berührungen anzeigen“) nachgespielt.
-  - Ziele: Fehler < 3 % des Wegs, Dauer < 1 Frame Abweichung.
-  - ⚠ Robolectric rendert Blur und AGSL eventuell nicht wie ein Gerät. Glasflächen werden deshalb zusätzlich mit Aufnahmen vom Gerät verglichen.
-- **Performance (`PERF.md`):** Macrobenchmark mit `FrameTimingMetric` je Geste plus Perfetto-Konfiguration. Ausgeführt wird auf deinem Gerät, die Auswertung mache ich. Blur-Flächen werden minimiert und gecacht.
+  - Gesten werden mit einer Fingerbahn nachgespielt. Weil öffentliche Videos den Finger nicht zeigen, ist sie meist `[geschätzt]`. Verglichen wird dann nur die Bewegung nach dem Loslassen.
+  - Ziele: Fehler < 3 % des Wegs, Dauer < 1 Frame Abweichung (Frame des Quellvideos).
+  - ⚠ Robolectric rendert Blur und AGSL eventuell nicht wie ein Gerät. Glasflächen werden deshalb zusätzlich mit Aufnahmen von den Testgeräten verglichen.
+- **Performance (`PERF.md`):** Macrobenchmark mit `FrameTimingMetric` je Geste plus Perfetto-Konfiguration. Ausgeführt wird auf dem S22 Ultra und dem S25 FE, die Auswertung mache ich. Blur-Flächen werden minimiert und gecacht.
 - **Barrierefreiheit:** TalkBack-Beschriftungen, Touch-Ziele von mindestens 48 dp, Kontrastprüfung im Diff-Skript. Reduce Motion folgt der System-Animator-Skala, das Verhalten laut `MOTION_TOKENS.md` (offen).
 
 ## Phasen
@@ -82,7 +85,7 @@ Aufwand in Personentagen (PT) für eine erfahrene Person. Das sind grobe Bandbre
 - Demo-Galerie aller Komponenten und Zustände, Previews, Unit-Tests der Gestenphysik. `LICENSES.md` ab der ersten fremden Ressource (Schrift, Haze).
 - **Risiken:**
   - Die Platzhalter-Schrift hat andere Metriken als das Original, < 2 dp ist bei Text eventuell nicht erreichbar. Gegenmaßnahme: Auswahl nach x-Höhe. Eine eigene, lizenzierte Schrift ist austauschbar.
-  - Kantenlicht und Refraktion lassen sich aus Screenshots nur begrenzt messen. Reagiert das Licht auf Neigung, braucht es eine Aufnahme mit geneigtem Gerät.
+  - Kantenlicht und Refraktion lassen sich aus Screenshots nur begrenzt messen. Reagiert das Licht auf Neigung, braucht es ein Video mit geneigtem Gerät. Findet sich keins, ist das Verhalten `[geschätzt]`.
 
 ### Phase B – Lockscreen und AOD (12–18 PT)
 - Uhr-Stile, Live Clock, transparentes Uhr-Widget, Kontrastlogik, Hoch-/Quer-/Faltformat.
@@ -122,25 +125,26 @@ Aufwand in Personentagen (PT) für eine erfahrene Person. Das sind grobe Bandbre
 ### Phase G – Reale Systemintegration (nur nach deiner Freigabe, 10–25 PT, hohes Risiko)
 Prototypen laut `LIMITATIONS.md`: Accessibility-Overlay, `NotificationListenerService`, `TileService`, Overlay-Lockscreen, Device-Owner-Variante. LSPosed, eigenes ROM oder Systemapp nur auf ausdrücklichen Wunsch.
 
-**Summe A–F: ca. 85–125 PT.** „1:1“ ist für den In-App-Nachbau realistisch. Für die echte Systemintegration ohne Root ist es das nicht, und das wird nirgends anders behauptet.
+**Summe A–F: ca. 85–125 PT.** Ohne eigenes ColorOS-17-Gerät lässt sich „1:1“ nicht nachweisen. Das Ziel ist die größtmögliche Nähe, die das öffentliche Material erlaubt. Jeder Wert ist als gemessen oder geschätzt gekennzeichnet. Für die echte Systemintegration ohne Root ist 1:1 ohnehin nicht möglich, und das wird nirgends anders behauptet.
 
 ## Übergreifende Risiken
 
 | Risiko | Wirkung | Gegenmaßnahme |
 |---|---|---|
-| Lückenhafte oder komprimierte Referenz | Werte bleiben TODO oder werden ungenau | ★-Set zuerst, Aufnahme-Regeln, nachfragen statt raten |
+| Lückenhafte oder komprimierte Referenz | Werte bleiben TODO oder werden ungenau | ★-Set zuerst, Regeln in `reference/README.md`, nachfragen statt raten |
+| Kein ColorOS-17-Gerät | Nur öffentliches Material, also unbekannter Maßstab, Kompression, kein Finger, keine Haptik | Proportionale Messung, Unsicherheit je Wert, `[geschätzt]`-Marken. Ein später verfügbares Gerät ersetzt die Werte |
 | ColorOS 17 und Android 17 sind neu | Wenig öffentliche Information. Meine Kenntnis der Android-17-API-Änderungen ist begrenzt | Hypothesen nur nach Referenz übernehmen. API-Annahmen in Phase A gegen das aktuelle SDK prüfen |
-| Herstellerspezifisches Glas (Sättigung, Rauschen, Licht) | Material wirkt anders | Messung mit Kalibrier-Wallpaper, AGSL-Kette mit Parametern aus der Spec |
+| Herstellerspezifisches Glas (Sättigung, Rauschen, Licht) | Material wirkt anders | Messung an Textkanten hinter dem Glas, AGSL-Kette mit Parametern aus der Spec |
 | Leistung vieler Glas-Ebenen | Ruckeln bei 120 Hz | Einmal blurren und teilen, herunterskalierte Ebenen, Messung per Macrobenchmark |
 | Robolectric rendert Glas anders als ein Gerät | Diff für Glas unzuverlässig | Geometrie per Robolectric, Glas per Geräteaufnahme |
-| Kein Gerät im Container | Performance und Haptik hier nicht prüfbar | Skripte für dein Gerät, du schickst die Ergebnisse |
+| Kein Gerät im Container | Performance und Haptik hier nicht prüfbar | Skripte für S22 Ultra und S25 FE, du schickst die Ergebnisse |
 | Umfang des Referenzmaterials (109 Einträge, gut 120 Dateien) | Hoher Aufwand für dich | Nach Phasen liefern, jeweils nur das nächste Set |
 | Rechtliches | Original-UI ist geschützt | Keine Assets, keine Marken, Referenz nur privat, nie in der APK |
 
 ## Was ich als Nächstes brauche
 
-1. **Das ★-Set** aus [`reference/INDEX.md`](reference/INDEX.md) (28 Dateien) für Phase A. Den Rest phasenweise.
-2. **Gerät und Build:** Kopfzeilen in `reference/INDEX.md` bzw. die Ausgabe von `adb shell wm size`, `wm density`, `getprop ro.build.display.id`.
+1. **Das ★-Set** (25 Dateien) aus öffentlichen Quellen, siehe [`CHECKLISTE.md`](CHECKLISTE.md) und [`reference/QUELLEN.md`](reference/QUELLEN.md). Den Rest phasenweise.
+2. **Optional:** Android- und One-UI-Version der Testgeräte.
 3. **Netzwerk:** `dl.google.com` freigeben oder entscheiden, dass Builds nur über GitHub Actions laufen.
 4. **Neutraler Arbeitstitel und Paketname.** Vorschlag: „Shell“, Paket `app.shell.fluid`.
 5. **Externe Bibliothek:** Ist Haze (Apache-2.0) als Abhängigkeit in Ordnung, falls es den Vergleich in Phase A gewinnt?

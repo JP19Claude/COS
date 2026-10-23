@@ -3,6 +3,16 @@
 Was eine normale App auf einem nicht gerooteten Gerät **nicht** 1:1 nachbauen kann, welche Alternativen es gibt und was Wege mit mehr Rechten kosten.
 
 > **Status: Entwurf (Phase 0, 2026-10-23).** Die Aussagen beruhen auf dokumentiertem Android-Plattformverhalten bis Android 16. Punkte mit ⚠ hängen vom Hersteller, vom Gerät oder von Änderungen in Android 17 ab und werden geprüft. API-Annahmen in Phase A gegen das aktuelle SDK, die praktischen Wege in Phase G.
+> Die Testgeräte sind Samsung-Geräte (S22 Ultra, S25 FE, One UI). Auf ihnen werden ⚠-Punkte geprüft. Wie sich ColorOS selbst verhält, bleibt ohne ColorOS-Gerät offen.
+
+## Grenze durch fehlendes ColorOS-Gerät
+
+Neben den Grenzen der Plattform gibt es eine zweite Grenze: Es gibt kein ColorOS-17-Gerät. Werte stammen aus öffentlichem Material (`DESIGN_SPEC.md` §1a). Deshalb gilt:
+- **Maßstab:** Der absolute Maßstab ist ein geschätzter Parameter.
+- **Gesten und Haptik:** Sie sind überwiegend geschätzt.
+- **Pixelgenauigkeit:** Sie ist nicht nachweisbar.
+
+Der Nachbau wird so nah wie möglich, aber nicht nachweislich 1:1.
 
 ## Grundsatz
 
@@ -23,7 +33,7 @@ Der **In-App-Nachbau** ist eine Demo-Shell mit simulierter Statusleiste, simulie
 | **Always-on-Display** | `DreamService` (Bildschirmschoner) beim Laden oder Docken | Zeichnen bei ausgeschaltetem Bildschirm | Optik in der Shell |
 | **PIN / Muster / Passwort / Biometrie** | Eigene Optik für eine reine App-Sperre | Eigene Oberfläche für Geräte-PIN oder Biometrie. `BiometricPrompt` zeigt immer die System-Oberfläche | Optik und Animationen in der Shell |
 | **Statusleiste** | Eigene Leiste in eigenen Activities (System-Leiste ausgeblendet) mit echten Daten: Zeit, Akku, Netz, Benachrichtigungs-Icons per `NotificationListenerService` | Die System-Statusleiste ersetzen. Normale Overlays (`TYPE_APPLICATION_OVERLAY`) liegen unter ihr | Accessibility-Overlay (unten) |
-| **Island / Live-Inhalte systemweit** ⚠ | Ab Android 16 „Live Updates“ (`Notification.ProgressStyle`, hervorgehobene laufende Benachrichtigungen). Die App liefert den Inhalt, das System zeichnet ihn in seiner eigenen Form | Eine eigene Island über der echten Statusleiste zeichnen | Island in der Shell vollständig. Wie ColorOS Live Updates darstellt, wird auf dem Gerät geprüft |
+| **Island / Live-Inhalte systemweit** ⚠ | Ab Android 16 „Live Updates“ (`Notification.ProgressStyle`, hervorgehobene laufende Benachrichtigungen). Die App liefert den Inhalt, das System zeichnet ihn in seiner eigenen Form | Eine eigene Island über der echten Statusleiste zeichnen | Island in der Shell vollständig. Wie ColorOS Live Updates darstellt, bleibt ohne ColorOS-Gerät offen. Auf den Testgeräten wird die One-UI-Darstellung geprüft |
 | **Pull-Down (Benachrichtigungen / CC)** ⚠ | Per Accessibility-Dienst: Ein Overlay-Streifen über der Statusleiste fängt den Wisch ab und öffnet die eigene Oberfläche. So arbeiten bekannte Drittanbieter-„Notification-Shade“-Apps | Die System-Leiste deaktivieren (außer mit Device Owner, unten). Konflikte mit der System-Geste sind möglich | — |
 | **Benachrichtigungen** | Vollständige Liste, Schließen, Aktionen, Direktantwort, Gruppen per `NotificationListenerService` | — | — |
 | **Kontrollzentrum: Kacheln** | Taschenlampe, Helligkeit (`WRITE_SETTINGS`), Lautstärke, Nicht stören, Auto-Rotation, Medien-Steuerung (`MediaSessionManager`), eigene `TileService`-Kacheln im System-Menü | WLAN, Bluetooth, mobile Daten, Flugmodus, Standort, Hotspot und NFC direkt umschalten (seit Android 10 bzw. 13 für Apps gesperrt) | Antippen öffnet das System-Panel (`Settings.Panel` bzw. Einstellungs-Intent). Einige Schalter gehen nach einmaligem `adb shell pm grant … WRITE_SECURE_SETTINGS` ⚠ |

@@ -3,10 +3,13 @@
 Alle Bewegungs-Tokens des Nachbaus. `MotionTokens.kt` wird hieraus befüllt. Jedes Token im Code trägt den Namen und die Quelle aus dieser Tabelle.
 
 > **Status (2026-10-23): Gerüst (Phase 0).** `—` heißt: noch nicht gemessen. Jede Zeile bleibt `TODO: Referenz nötig`, bis Quelle und Fit-Fehler eingetragen sind.
+> Gemessen wird an öffentlichen Videos (siehe `DESIGN_SPEC.md` §1a). Eingetragene Werte tragen in der Status-Spalte `[öffentlich ±u]` oder `[geschätzt]`.
 
 ## Abnahmeziele
 
 - Positions- bzw. Skalenfehler unter 3 % des Wegs pro Frame, Dauer weniger als 1 Frame Abweichung (Report: `MOTION_REPORT.md`).
+  - „1 Frame“ bezieht sich auf die Bildrate des Quellvideos, bei 60 fps also ±17 ms.
+  - Für `[geschätzt]`-Tokens gibt es keinen Vergleich, sie stehen als offen im Report.
 - Jede Animation ist unterbrechbar und übernimmt die Geschwindigkeit. Beim Abbrechen oder Umkehren gibt es keine Sprünge.
 
 ## Notation
@@ -144,4 +147,4 @@ Alle Bewegungs-Tokens des Nachbaus. `MotionTokens.kt` wird hieraus befüllt. Jed
 
 ## Reduce Motion
 
-Das Verhalten bei „Animationen entfernen“ bzw. Animator-Skala 0 ist noch offen: TODO: Referenz nötig (`system-panels/reduce_motion.mp4`). Kommt dazu keine Referenz, schlage ich ein Verhalten vor und kennzeichne es als Entwurf, nicht als gemessen.
+Das Verhalten bei „Animationen entfernen“ bzw. Animator-Skala 0 ist offen. Ohne eigenes Gerät lässt es sich nicht aufnehmen (`system-panels/reduce_motion.mp4` entfällt). Ich schlage deshalb ein Verhalten vor und kennzeichne es als `[geschätzt]`: Übergänge auf Überblenden verkürzen, Federn und Parallax abschalten, Gesten folgen dem Finger weiterhin.

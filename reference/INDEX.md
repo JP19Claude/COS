@@ -1,30 +1,25 @@
 # Referenz-Index
 
-> **Status (2026-10-23): leer.** Es liegt noch kein Material vor, alle neun Ordner fehlen vollständig. Aufnahme-Regeln: [`README.md`](README.md). Abhak-Liste für den Start: [`CHECKLISTE.md`](../CHECKLISTE.md).
+> **Status (2026-10-23): leer.** Es liegt noch kein Material vor, alle neun Ordner fehlen vollständig. Es gibt kein eigenes ColorOS-17-Gerät, das Material kommt aus öffentlichen Quellen ([`QUELLEN.md`](QUELLEN.md)). Regeln: [`README.md`](README.md). Abhak-Liste für den Start: [`CHECKLISTE.md`](../CHECKLISTE.md).
 
-## Gerät
+## Testgeräte für die App
 
-Diese Angaben gelten für alle Dateien, sofern die Dateitabelle nichts anderes vermerkt.
+Auf diesen Geräten wird die App installiert und gemessen. Sie sind keine Referenz für das Aussehen.
 
-| Feld | Wert |
-|---|---|
-| Gerät (Modell) | TODO: Referenz nötig |
-| ColorOS-Build (Einstellungen → Über das Gerät) | TODO: Referenz nötig |
-| Android-Version | TODO: Referenz nötig |
-| Auflösung (px) | TODO: Referenz nötig |
-| Dichte (dpi) | TODO: Referenz nötig |
-| Display-Bildwiederholrate | TODO: Referenz nötig |
-| Aufnahme-Bildrate | TODO: Referenz nötig |
+| Gerät | Android / One UI | Rolle |
+|---|---|---|
+| Samsung Galaxy S22 Ultra | TODO: Angabe nötig | Test, Performance, Haptik |
+| Samsung Galaxy S25 FE | TODO: Angabe nötig | Test, Performance, Haptik |
 
 ## Dateien
 
-| Datei | Inhalt | Hell/Dunkel | Wallpaper | fps | Abweichendes Gerät/Build | Notiz |
-|---|---|---|---|---|---|---|
-| — | noch keine | | | | | |
+| Datei | Inhalt | Hell/Dunkel | Quelle (Link, ggf. Zeitstempel) | Gerät im Material | Art (Bildschirmfoto / -aufnahme / Pressebild) | Auflösung | fps | Notiz |
+|---|---|---|---|---|---|---|---|---|
+| — | noch keine | | | | | | | |
 
 ## Fehlendes Material pro Ordner
 
-★ = Minimal-Set für Phase A (Glas-Presets und Grundkomponenten). Wenn ein Merkmal auf deinem Gerät nicht existiert (z. B. Multicolor, Kategorien in der Schublade), sag es mir. Dann streiche ich es, statt zu raten.
+★ = Minimal-Set für Phase A (Glas-Presets und Grundkomponenten), 25 Dateien. „entfällt (kein Gerät)“ = nur mit eigenem ColorOS-17-Gerät machbar. Ist ein Merkmal öffentlich nirgends zu finden (z. B. Multicolor, Kategorien in der Schublade), sag es mir. Dann markiere ich den Wert als geschätzt, statt still zu raten.
 
 ### `lockscreen/`
 
@@ -40,7 +35,7 @@ Diese Angaben gelten für alle Dateien, sofern die Dateitabelle nichts anderes v
 | `clock_contrast.png` | Dieselbe Uhr auf hellem und auf dunklem Wallpaper (Kontrastlogik) |  |
 | `clock_landscape.png` | Querformat, bei faltbarem Gerät auch Faltformat |  |
 | `depth_effect.png` | Motiv vor der Uhr (falls verfügbar) |  |
-| `parallax.mp4` | Gerät neigen, Wallpaper `calibration/grid_numbered.png` |  |
+| `parallax.mp4` | Gerät neigen, Wallpaper `calibration/grid_numbered.png` | entfällt (kein Gerät) |
 | `video_wallpaper.mp4` | Motion-Photo-/Video-Wallpaper inkl. Übergang beim Aufwecken/Entsperren (falls genutzt) |  |
 | `widgets.png` | Lockscreen mit allen Widgets |  |
 | `widgets_edit.mp4` | Widgets hinzufügen und anordnen |  |
@@ -70,7 +65,7 @@ Diese Angaben gelten für alle Dateien, sofern die Dateitabelle nichts anderes v
 | `island_notification.mp4` | Island-Benachrichtigung: erscheinen, zusammenziehen, expandieren, wegwischen |  |
 | `island_multi.mp4` | Zwei Island-Benachrichtigungen gleichzeitig |  |
 | `shade_light.png`, `shade_dark.png` | Benachrichtigungsleiste voll offen |  |
-| `shade_checker.png` | Voll offen, Wallpaper `calibration/checker_360.png` |  |
+| `shade_checker.png` | Voll offen, Wallpaper `calibration/checker_360.png` | entfällt (kein Gerät) |
 | `shade_pull_slow.mp4` | Langsam herunterziehen, halten, zurück, loslassen |  |
 | `shade_pull_fling.mp4` | Schnell öffnen und schließen |  |
 | `shade_zones.mp4` | Herunterziehen an mehreren x-Positionen (Zonen Benachrichtigungen/CC) |  |
@@ -83,7 +78,7 @@ Diese Angaben gelten für alle Dateien, sofern die Dateitabelle nichts anderes v
 | Datei | Inhalt | |
 |---|---|---|
 | `cc_light.png`, `cc_dark.png` | Kontrollzentrum voll geöffnet | ★ |
-| `cc_checker.png` | Voll geöffnet, Wallpaper `calibration/checker_360.png` | ★ |
+| `cc_checker.png` | Voll geöffnet, Wallpaper `calibration/checker_360.png` | entfällt (kein Gerät) |
 | `cc_open_slow.mp4` | Langsam öffnen, halten, zurück, loslassen |  |
 | `cc_open_fling.mp4` | Schnell öffnen und schließen |  |
 | `cc_toggle.mp4` | Mehrere Kacheln an/aus, kleine und große |  |
@@ -102,7 +97,7 @@ Diese Angaben gelten für alle Dateien, sofern die Dateitabelle nichts anderes v
 | Datei | Inhalt | |
 |---|---|---|
 | `home_light.png`, `home_dark.png` | Seite mit Dock, Ordner, Widget und Suchleiste | ★ |
-| `home_checker.png` | Dieselbe Seite, Wallpaper `calibration/checker_360.png` | ★ |
+| `home_checker.png` | Dieselbe Seite, Wallpaper `calibration/checker_360.png` | entfällt (kein Gerät) |
 | `home_page_swipe.mp4` | Seitenwechsel langsam, als Fling und mit Rubber-Band am Rand |  |
 | `flux_shapes.png` | Alle Icon- und Ordner-Formen nebeneinander |  |
 | `flux_resize.mp4` | Icon und Ordner per Long-Press in jede Form skalieren, Reflow sichtbar |  |
@@ -177,5 +172,5 @@ Diese Angaben gelten für alle Dateien, sofern die Dateitabelle nichts anderes v
 | `settings_sub_light.png`, `settings_sub_dark.png` | Unterseite mit Switches, Slider, zweizeiligen Einträgen | ★ |
 | `settings_scroll.mp4` | Scrollen, Überscrollen, großer Titel klappt ein | ★ |
 | `keyboard.mp4` | Tastatur im Suchfeld ein- und ausblenden |  |
-| `reduce_motion.mp4` | CC öffnen und App öffnen mit „Animationen entfernen“ an |  |
-| `haptics.md` | Text: wo Vibration spürbar ist, kurz/lang, stark/schwach | ★ |
+| `reduce_motion.mp4` | CC öffnen und App öffnen mit „Animationen entfernen“ an | entfällt (kein Gerät) |
+| `haptics.md` | Text: wo Vibration spürbar ist, kurz/lang, stark/schwach | entfällt (kein Gerät) |

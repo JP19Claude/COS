@@ -1,8 +1,10 @@
 # Referenzmaterial
 
-Hier liegen Screenshots und Bildschirmaufnahmen des Originals (ColorOS 17). Alle Werte in [`DESIGN_SPEC.md`](../DESIGN_SPEC.md) und [`MOTION_TOKENS.md`](../MOTION_TOKENS.md) werden daraus gemessen. Das Material dient nur als private Referenz. Es wird nie Teil der App und das Repo bleibt privat.
+Hier liegen Screenshots und Bildschirmaufnahmen von ColorOS 17. Alle Werte in [`DESIGN_SPEC.md`](../DESIGN_SPEC.md) und [`MOTION_TOKENS.md`](../MOTION_TOKENS.md) werden daraus gemessen. Das Material dient nur als private Referenz. Es wird nie Teil der App und das Repo bleibt privat.
 
-Was konkret fehlt, steht pro Ordner in [`INDEX.md`](INDEX.md).
+- **Woher das Material kommt:** Es gibt kein eigenes ColorOS-17-Gerät. Das Material stammt aus öffentlichen Quellen, siehe [`QUELLEN.md`](QUELLEN.md).
+- **Was fehlt:** steht pro Ordner in [`INDEX.md`](INDEX.md).
+- **Was zuerst gebraucht wird:** steht in [`../CHECKLISTE.md`](../CHECKLISTE.md).
 
 ## Ordner
 
@@ -17,35 +19,27 @@ Was konkret fehlt, steht pro Ordner in [`INDEX.md`](INDEX.md).
 | `nav/` | Kapsel-Navigationsleiste, Gesten, Predictive Back |
 | `app-transitions/` | App öffnen/schließen aus Icon, Ordner, Recents |
 | `system-panels/` | Lautstärke, Ausschalt-Menü, Dialoge, Bottom-Sheets, Toggles, Switches, Einstellungen |
-| `calibration/` | Kalibrier-Wallpaper (von mir erzeugt, kein Original-Material) |
+| `calibration/` | Kalibrier-Wallpaper (von mir erzeugt). Nur für eigene Aufnahmen an einem ColorOS-17-Gerät nötig |
 
-## Aufnahme-Regeln
+## Regeln für öffentliches Material
 
-1. **Ein Gerät, ein Build.** Das gesamte Material stammt von einem Gerät mit einem ColorOS-17-Build. Trage Gerät, Auflösung, dpi, Bildrate und Build oben in `INDEX.md` ein. Weicht eine Datei ab, vermerke das in deren Zeile.
-2. **Standardgrößen:** Anzeigegröße und Schriftgröße stehen auf Standard.
-3. **Entwickleroptionen:**
-   - Alle drei Animationsskalen auf **1x**.
-   - **Berührungen anzeigen** an, für alle Gesten-Videos. Damit lässt sich messen, wie der Inhalt dem Finger folgt.
-4. **Bildrate:** Display auf die höchste Bildwiederholrate. Bildschirmaufnahme mit höchster Auflösung und höchster fps (mind. 60, besser 120), ohne Mikrofon.
-5. **Hell und Dunkel:** Jeder Screenshot mit `{light,dark}` im Namen wird in beiden Modi gebraucht. Bei Videos genügt ein Modus, sofern nicht anders angegeben.
-6. **Gesten zweimal:** einmal langsam (halten, hin und her ziehen, kurz vor der Schwelle loslassen) und einmal schnell als Fling.
-7. **Wallpaper notieren:** Glas verändert Farben. Vermerke in `INDEX.md`, welches Wallpaper zu sehen ist. Für die `*_checker.png`-Aufnahmen [`calibration/checker_360.png`](calibration/checker_360.png) als Wallpaper setzen. Daran lassen sich Blur, Transparenz und Tönung exakt ausrechnen. Für Parallax [`calibration/grid_numbered.png`](calibration/grid_numbered.png) verwenden.
-8. **Unkomprimiert übertragen:** PNG in Original-Auflösung. Nicht über Messenger schicken, die komprimieren.
+1. **Link immer mitschicken.** Er kommt in die Dateitabelle von `INDEX.md` und dient als Quellenangabe in der Spec.
+2. **Originalgröße:** Bilder im Browser in voller Auflösung öffnen und dann speichern, keine Vorschaubilder.
+3. **Bildschirmfotos vor Fotos vom Handy.** Abgefilmte Handys sind für Maße unbrauchbar.
+4. **Videos:** möglichst 1080p60 oder besser. Bei YouTube-Videos zusätzlich den Zeitstempel nennen.
+5. **Hell und Dunkel**, wo es beides gibt. Fehlt eine Variante, schreib „nur hell“ bzw. „nur dunkel“.
+6. **Nicht über Messenger schicken**, die komprimieren. Direkt hier im Chat hochladen.
 
-Falls adb vorhanden ist, bitte zusätzlich die Ausgabe von:
+## Falls du später ein ColorOS-17-Gerät hast
 
-```
-adb shell wm size
-adb shell wm density
-adb shell getprop ro.build.display.id
-```
+Dann sind eigene Aufnahmen deutlich genauer. Dafür gelten diese Regeln:
+- **Einstellungen:** Animationsskalen auf 1x, „Berührungen anzeigen“ an, höchste Bildwiederholrate, Bildschirmaufnahme in höchster Qualität, Anzeige- und Schriftgröße auf Standard.
+- **Kalibrier-Wallpaper:** Für Glas-Aufnahmen [`calibration/checker_360.png`](calibration/checker_360.png), für Parallax [`calibration/grid_numbered.png`](calibration/grid_numbered.png).
+- **Gerätedaten:** `adb shell wm size`, `adb shell wm density` und `adb shell getprop ro.build.display.id` notieren.
 
-## Übertragung
+Eigene Aufnahmen ersetzen dann die öffentlichen Werte.
 
-- **Bevorzugt:** Dateien hier im Chat hochladen. Ich lege sie im passenden Ordner ab und trage sie in `INDEX.md` ein.
-- **Alternativ:** direkt committen. Videos über ca. 50 MB besser per Git LFS.
-
-## Kalibrier-Wallpaper neu erzeugen
+Die Kalibrier-Wallpaper lassen sich neu erzeugen mit:
 
 ```
 python3 tools/make_calibration_wallpapers.py reference/calibration
