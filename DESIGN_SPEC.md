@@ -1,251 +1,1984 @@
 # DESIGN_SPEC
 
-Zentrale Quelle für alle gemessenen Gestaltungs- und Bewegungswerte. Der Code liest ausschließlich Tokens, die hier stehen.
+Gemessene Gestaltungs-, Bewegungs- und Haptikwerte für den Nachbau. Der Code liest Werte nur aus Token-Dateien, die aus dieser Spec befüllt werden.
 
-> **Status (2026-10-23): Skelett.** `reference/` enthält noch kein Material. Deshalb ist jeder Wert `TODO: Referenz nötig`. Es wurde nichts geschätzt.
-> Was gebraucht wird, steht in [`reference/README.md`](reference/README.md).
+> **Status (2026-10-23): Gerüst (Phase 0).** `reference/` enthält noch kein Material. Deshalb ist jeder Wert `TODO: Referenz nötig`. Nichts ist geschätzt.
+> Was fehlt, steht konkret pro Ordner in [`reference/INDEX.md`](reference/INDEX.md). Die Bewegungswerte stehen ausführlich in [`MOTION_TOKENS.md`](MOTION_TOKENS.md).
 
-Spalte **Quelle** = Datei in `reference/` + Frame-Nummer oder Pixel-Koordinate, aus der der Wert stammt. Ein Wert ohne Quelle gilt als nicht gemessen.
+## Konventionen
 
----
+- **Quelle:** `ordner/datei.mp4#f120-f164` für Frames, `ordner/datei.png@(x,y)` oder `@(x,y,b,h)` für Pixel bzw. Box. Ein Wert ohne Quelle gilt als nicht gemessen.
+- **Einheiten:** dp, sp, ms. Farben als `#RRGGBB @ α %`.
+- **Hell/Dunkel** werden getrennt erfasst. Bei Flächen mit Blur steht das Wallpaper dabei, über dem gemessen wurde.
+- **Hypothesen** aus öffentlichen Berichten (§3) gelten erst nach Prüfung an der Referenz. Abweichungen stehen dort in der Spalte „Befund“.
+- Die Komponentenabschnitte (§5–§13) nennen die zugehörigen Bewegungs-Tokens. Deren Werte stehen nur in `MOTION_TOKENS.md`.
 
-## 0. Meta
+## 1. Messprotokoll
+
+1. **Frames:** `ffmpeg -i in.mp4 -vsync 0 frames/%05d.png` extrahiert alle Frames in voller Bildrate (in ffmpeg ≥ 5.1 gleichwertig `-fps_mode passthrough`). Zeitstempel kommen aus `ffprobe -show_frames`, weil Bildschirmaufnahmen eine variable Bildrate haben können. Pro Animation entsteht ein Frame-Strip.
+2. **dp:** `dp = px / (dpi / 160)`.
+3. **Dauer und Kurve:**
+   - Dauer = Frame-Anzahl / fps. Bei variabler Bildrate gilt die Differenz der Zeitstempel.
+   - Pro Frame wird Position, Skala oder Alpha gemessen und auf einen Fortschritt von 0 bis 1 normiert.
+   - Gefittet wird gegen Cubic-Bezier und Feder (Steifigkeit, Dämpfung). Der Fit-Fehler (RMS und Maximum in % des Wegs) wird notiert.
+   - Gewählt wird die einfachste Kurve mit kleinem Fehler.
+4. **Farben:** Pipette als 5×5-Mittel. Getrennt nach Hell/Dunkel und nach Flächen mit und ohne Blur, jeweils mit dem verwendeten Wallpaper. Bei Glasflächen wird zusätzlich über `calibration/checker_360.png` gemessen: Aus derselben Fläche über Schwarz und Weiß folgen Alpha und Tint.
+5. **Blur:** Eine bekannte Kante hinter dem Glas (Schachbrett- oder Textkante) wird mit Gaußfiltern verschiedener Radien nachgestellt. Der beste Treffer ist der Radius. Die Umrechnung Sigma → `RenderEffect`-Radius wird beim ersten Gerätevergleich festgelegt.
+6. **Gesten:** Aufnahmen entstehen mit „Berührungen anzeigen“. Fingerpunkt und Inhaltsposition pro Frame ergeben den Mitlauffaktor, die Rubber-Band-Kurve und die Freigabe-Geschwindigkeit.
+7. **Hin und zurück getrennt:** Öffnen und Schließen werden getrennt gemessen und nie gespiegelt angenommen.
+
+## 2. Meta
 
 | Feld | Wert | Quelle |
 |---|---|---|
-| Gerät (Modell) | TODO: Referenz nötig | |
-| OS-Version (exakt, inkl. Build) | TODO: Referenz nötig | |
-| Displayauflösung (px) | TODO: Referenz nötig | `adb shell wm size` |
-| Displaydichte (dpi) | TODO: Referenz nötig | `adb shell wm density` |
-| Bildwiederholrate Display | TODO: Referenz nötig | |
-| Bildrate der Aufnahmen (fps) | TODO: Referenz nötig | `ffprobe` |
-| Anzeigegröße / Schriftgröße | TODO: Referenz nötig | muss auf Standard stehen |
-| Navigationsmodus | TODO: Referenz nötig | Gesten / 3 Tasten |
+| Gerät | TODO: Referenz nötig | `reference/INDEX.md` |
+| ColorOS-Build | TODO: Referenz nötig | |
+| Android-Version | TODO: Referenz nötig | |
+| Auflösung (px) | TODO: Referenz nötig | |
+| Dichte (dpi) | TODO: Referenz nötig | |
+| Display-Bildwiederholrate | TODO: Referenz nötig | |
+| Aufnahme-Bildrate | TODO: Referenz nötig | |
+| Anzeigegröße / Schriftgröße | TODO: Referenz nötig | |
+| Navigationsmodus | TODO: Referenz nötig | |
 
-## Messmethode
+## 3. Hypothesen aus öffentlichen Berichten (unverifiziert)
 
-- **px → dp:** `dp = px × 160 / dpi`. In dieser Datei stehen dp/sp. Der Roh-px-Wert steht in der Quellen-Spalte.
-- **Farben:** Mittelwert über 5×5 px in einer flachen Fläche, nicht an Kanten und nicht in Blur-Bereichen mit Verlauf.
-- **Transparente Flächen (Alpha + Tönung):** Dieselbe Fläche wird über bekanntem Schwarz und Weiß gemessen (Kalibrier-Wallpaper `reference/calibration/checker_360.png`). Aus `C = α·C_fläche + (1−α)·C_hintergrund` mit zwei Hintergründen folgen α und die Flächenfarbe.
-- **Blur:** Kantenbreite 10 %→90 % über einer harten Schwarz-Weiß-Kante ≈ 2,56·σ. Umrechnung in den `RenderEffect`-Radius nach Skia-Konvention σ ≈ 0,57735·r + 0,5. Die Konvention wird beim ersten Gerätevergleich geprüft.
-- **Animationen:** Frames mit `ffmpeg -fps_mode passthrough` extrahieren, Zeitstempel per `ffprobe -show_frames` lesen. Position/Skalierung/Alpha eines Elements pro Frame tracken und auf Fortschritt p(t) ∈ [0,1] normieren. Danach zwei Modelle fitten: (a) Cubic-Bezier mit festen Endpunkten, (b) gedämpfte Feder (Steifigkeit, Dämpfungsgrad). Das Modell mit kleinerem RMS-Fehler gewinnt, der Fehler wird notiert. Dauer = erster Frame mit Bewegung bis erster Frame in Ruhe. Die Genauigkeit liegt bei ±1 Frame (≈ 8–17 ms je nach fps).
-- **Gesten:** Aufnahmen mit „Berührungen anzeigen“. Aus Fingerpunkt und Inhaltsposition pro Frame folgen der Mitlauffaktor, die Rubber-Band-Funktion (Widerstand über Strecke) und das Verhalten nach dem Loslassen in Abhängigkeit von der Geschwindigkeit.
-- **Kurvenvergleich Hin/Rück:** Öffnen und Schließen werden getrennt gemessen und nie gespiegelt angenommen.
+Dies ist eine Checkliste und keine gemessene Wahrheit. Was die Referenz anders zeigt, hat Vorrang.
 
----
-
-## 1. Farben
-
-| Token | Hell | Dunkel | Quelle |
-|---|---|---|---|
-| `background` | TODO: Referenz nötig | TODO: Referenz nötig | |
-| `surface` (Karten, Listen-Gruppen) | TODO: Referenz nötig | TODO: Referenz nötig | |
-| `surfaceVariant` | TODO: Referenz nötig | TODO: Referenz nötig | |
-| `textPrimary` | TODO: Referenz nötig | TODO: Referenz nötig | |
-| `textSecondary` | TODO: Referenz nötig | TODO: Referenz nötig | |
-| `textTertiary` / deaktiviert | TODO: Referenz nötig | TODO: Referenz nötig | |
-| `divider` | TODO: Referenz nötig | TODO: Referenz nötig | |
-| `accent` (Standard-Akzent) | TODO: Referenz nötig | TODO: Referenz nötig | |
-| `accentContainer` | TODO: Referenz nötig | TODO: Referenz nötig | |
-| Akzent-Palette (wählbare Akzente) | TODO: Referenz nötig | TODO: Referenz nötig | |
-| `error` | TODO: Referenz nötig | TODO: Referenz nötig | |
-| CC-Kachel aus (Fläche + α) | TODO: Referenz nötig | TODO: Referenz nötig | |
-| CC-Kachel an (Fläche) | TODO: Referenz nötig | TODO: Referenz nötig | |
-| CC-Kachel Icon an / aus | TODO: Referenz nötig | TODO: Referenz nötig | |
-| Slider-Spur / -Füllung | TODO: Referenz nötig | TODO: Referenz nötig | |
-| Benachrichtigungskarte (Fläche + α) | TODO: Referenz nötig | TODO: Referenz nötig | |
-| Scrim Lockscreen | TODO: Referenz nötig | TODO: Referenz nötig | |
-| Scrim Benachrichtigungsleiste / CC | TODO: Referenz nötig | TODO: Referenz nötig | |
-| Dock-Hintergrund (Fläche + α) | TODO: Referenz nötig | TODO: Referenz nötig | |
-| Ordner-Hintergrund (geschlossen / offen) | TODO: Referenz nötig | TODO: Referenz nötig | |
-| Schublade-Hintergrund | TODO: Referenz nötig | TODO: Referenz nötig | |
-| Switch: Spur an/aus, Knopf an/aus | TODO: Referenz nötig | TODO: Referenz nötig | |
-| Benachrichtigungspunkt (Badge) | TODO: Referenz nötig | TODO: Referenz nötig | |
-
-Dynamische Akzentfarbe: Herkunft (aus Wallpaper extrahiert oder feste Auswahl) — TODO: Referenz nötig.
-
-## 2. Typografie
-
-Schrift: Platzhalter, austauschbar über eine Theme-Datei. Kandidaten sind Inter Variable und Roboto Flex. Gewählt wird die Schrift, deren x-Höhe und Versalhöhe den gemessenen Werten am nächsten kommen. Entscheidung: TODO: Referenz nötig.
-
-| Rolle | Größe (sp) | Gewicht | Zeilenhöhe | Laufweite | Quelle |
-|---|---|---|---|---|---|
-| Lockscreen-Uhr (je Uhr-Variante) | TODO: Referenz nötig | | | | |
-| Lockscreen-Datum | TODO: Referenz nötig | | | | |
-| Lockscreen-Infozeile (Wetter o. ä.) | TODO: Referenz nötig | | | | |
-| Statusleisten-Uhr | TODO: Referenz nötig | | | | |
-| Benachrichtigung: App-Name / Zeit | TODO: Referenz nötig | | | | |
-| Benachrichtigung: Titel | TODO: Referenz nötig | | | | |
-| Benachrichtigung: Text | TODO: Referenz nötig | | | | |
-| CC-Kachel: Label / Unterlabel | TODO: Referenz nötig | | | | |
-| CC große Kachel: Titel / Status | TODO: Referenz nötig | | | | |
-| Medienkarte: Titel / Interpret | TODO: Referenz nötig | | | | |
-| App-Icon-Beschriftung | TODO: Referenz nötig | | | | |
-| Ordner-Titel (offen) | TODO: Referenz nötig | | | | |
-| Schublade: Suchfeld, Buchstaben-Leiste | TODO: Referenz nötig | | | | |
-| Einstellungen: großer Titel (ausgeklappt / eingeklappt) | TODO: Referenz nötig | | | | |
-| Einstellungen: Eintrag-Titel / Untertitel | TODO: Referenz nötig | | | | |
-| Dialog: Titel / Text / Button | TODO: Referenz nötig | | | | |
-
-## 3. Formen und Radien
-
-| Element | Form | Radius (dp) | Quelle |
-|---|---|---|---|
-| App-Icon-Maske | TODO: Referenz nötig (abgerundetes Rechteck oder Superellipse, ggf. Exponent n) | | |
-| Benachrichtigungskarte | | TODO: Referenz nötig | |
-| CC kleine Kachel | | TODO: Referenz nötig | |
-| CC große Kachel / Verbindungskarte | | TODO: Referenz nötig | |
-| CC-Slider | | TODO: Referenz nötig | |
-| Medienkarte | | TODO: Referenz nötig | |
-| Ordner-Icon (geschlossen) | | TODO: Referenz nötig | |
-| Ordner-Panel (offen) | | TODO: Referenz nötig | |
-| Dock | | TODO: Referenz nötig | |
-| Widget-Rahmen | | TODO: Referenz nötig | |
-| Recents-Karte | | TODO: Referenz nötig | |
-| Dialog | | TODO: Referenz nötig | |
-| Bottom-Sheet (oben) | | TODO: Referenz nötig | |
-| Button | | TODO: Referenz nötig | |
-| Suchfeld | | TODO: Referenz nötig | |
-| Einstellungs-Gruppe (Karte) | | TODO: Referenz nötig | |
-
-Bei einer Superellipse werden 12+ Konturpunkte pro Viertel abgetastet und n gefittet.
-
-## 4. Schatten und Elevation
-
-| Element | Versatz x/y (dp) | Blur (dp) | Farbe + α | Quelle |
+| # | Hypothese | Betrifft | Prüfen mit | Befund |
 |---|---|---|---|---|
-| App-Icon | TODO: Referenz nötig | | | |
-| Icon beim Ziehen (angehoben) | TODO: Referenz nötig | | | |
-| Ordner-Panel | TODO: Referenz nötig | | | |
-| Dialog / Bottom-Sheet | TODO: Referenz nötig | | | |
-| Recents-Karte | TODO: Referenz nötig | | | |
+| H1 | „Fluid Design“: Frosted-Glass-Flächen, stark gerundete Ecken, Echtzeit-Beleuchtung/Lichtkanten, kräftiger Blur, Flux-Themes | alle | `control-center/cc_checker.png`, `home/home_checker.png`, `home/folder_open_*.png` | offen |
+| H2 | Transparente, kapselförmige, schwebende Navigationsleiste in System-Apps (Telefon, Notizen, Rekorder) | §11 | `nav/capsule_*.png`, `nav/capsule_transition.mp4` | offen |
+| H3 | „Fluid Fusion“: federnd, physikbasiert, Animationen starten am Berührungspunkt und kehren dorthin zurück. „Seamless Animation“ ab ColorOS 16 bleibt | Motion | `app-transitions/*`, `control-center/cc_open_*.mp4` | offen |
+| H4 | Kontrollzentrum: komplett runde Kacheln, anpassbares Raster (4×4-Bereich oben), Kacheln verschiebbar und skalierbar, Medienkarte, Geräte-Panel, optional Multicolor | §7 | `control-center/*` | offen |
+| H5 | Flux Home: Icons und Ordner per Long-Press in hohe/breite/große Formen, Live-Reflow. Ordner in Milchglas mit Blur | §8 | `home/flux_*`, `home/folder_*` | offen |
+| H6 | Lockscreen: transparentes Uhr-Widget, Live Clock, durchgehender Wallpaper-Übergang AOD→Lock→Home, Vollbild-AOD, mehrere Widgets, Island (Pille, ziehbar), Licht-und-Schatten-Animationen | §5 | `lockscreen/*` | offen |
+| H7 | Schwebende Island-Benachrichtigungen, gestapelte Einzelkarten statt einer großen Fläche | §6 | `statusbar-shade/*` | offen |
+| H8 | Contour-Glow: dezentes Schimmern um Kacheln, Ordner, Suchleiste, Widgets, abschaltbar | §7, §8 | `home/contour_glow.mp4`, `home/glow_off.png` | offen |
 
-## 5. Blur und Materialien
+## 4. Fundament (Zusammenfassung)
 
-| Material | Blur-Radius (dp) | Tönung (Farbe + α) | Sättigung / Helligkeit | Fallback API 29–30 | Quelle |
+Diese Tabellen fassen Werte aus den Komponentenabschnitten zusammen. Die Quelle ist jeweils der genannte Komponentenabschnitt.
+
+### 4.1 Farbrollen
+
+| Rolle | Hell | Dunkel | Quelle |
+|---|---|---|---|
+| Hintergrund | TODO: Referenz nötig | TODO: Referenz nötig | |
+| Fläche | TODO: Referenz nötig | TODO: Referenz nötig | |
+| Fläche, Variante | TODO: Referenz nötig | TODO: Referenz nötig | |
+| Text primär / sekundär / tertiär | TODO: Referenz nötig | TODO: Referenz nötig | |
+| Trennlinie | TODO: Referenz nötig | TODO: Referenz nötig | |
+| Akzent / Akzent-Container | TODO: Referenz nötig | TODO: Referenz nötig | |
+| Fehler | TODO: Referenz nötig | TODO: Referenz nötig | |
+| Scrim | TODO: Referenz nötig | TODO: Referenz nötig | |
+
+Dynamische Akzentfarbe (wie sie aus dem Wallpaper abgeleitet wird): TODO: Referenz nötig.
+
+### 4.2 Typografie-Skala
+
+Die Schrift ist ein Platzhalter: Inter Variable oder Roboto Flex. Gewählt wird nach x-Höhe und Laufweite der Referenz.
+
+| Stufe | Größe (sp) | Gewicht | Laufweite | Zeilenhöhe | Quelle |
 |---|---|---|---|---|---|
-| Lockscreen-Benachrichtigungen | TODO: Referenz nötig | | | | |
-| Benachrichtigungsleiste (voll offen) | TODO: Referenz nötig | | | | |
-| Kontrollzentrum (voll offen) | TODO: Referenz nötig | | | | |
-| Dock | TODO: Referenz nötig | | | | |
-| Ordner offen | TODO: Referenz nötig | | | | |
-| App-Schublade | TODO: Referenz nötig | | | | |
-| Recents | TODO: Referenz nötig | | | | |
-| Hinter Dialogen / Sheets | TODO: Referenz nötig | | | | |
-| Lautstärke-Panel | TODO: Referenz nötig | | | | |
+| Uhr / Display | TODO: Referenz nötig | | | | |
+| Titel groß | TODO: Referenz nötig | | | | |
+| Titel | TODO: Referenz nötig | | | | |
+| Text | TODO: Referenz nötig | | | | |
+| Label | TODO: Referenz nötig | | | | |
+| Klein | TODO: Referenz nötig | | | | |
 
-Blur-Aufbau über den Gestenfortschritt (Blur-Radius als Funktion von p) bei Benachrichtigungsleiste und CC: TODO: Referenz nötig.
+Verhalten bei Schriftgrößen-Skalierung: TODO: Referenz nötig.
 
-## 6. Raster und Abstände
+### 4.3 Radien-Skala
 
-| Wert | dp | Quelle |
-|---|---|---|
-| Seitlicher Bildschirmrand (Standard) | TODO: Referenz nötig | |
-| Statusleistenhöhe | TODO: Referenz nötig | |
-| Gestenleiste unten (Höhe / Breite) | TODO: Referenz nötig | |
-| Launcher-Raster Spalten × Zeilen | TODO: Referenz nötig | |
-| App-Icon-Größe | TODO: Referenz nötig | |
-| Abstand Icon → Beschriftung | TODO: Referenz nötig | |
-| Zellbreite / Zellhöhe | TODO: Referenz nötig | |
-| Seitenindikator: Position, Punktgröße, Abstand | TODO: Referenz nötig | |
-| Dock: Höhe, Rand, Icon-Anzahl | TODO: Referenz nötig | |
-| Ordner offen: Raster, Innenabstand | TODO: Referenz nötig | |
-| Ordner-Vorschau: Mini-Icon-Anzahl, -Größe, -Abstand | TODO: Referenz nötig | |
-| Schublade: Spalten, Zeilenabstand | TODO: Referenz nötig | |
-| CC: Spalten, Kachelgröße klein/groß, Abstand, Rand | TODO: Referenz nötig | |
-| Benachrichtigungskarte: Rand, Abstand, Innenabstand | TODO: Referenz nötig | |
-| Recents: Kartenbreite, -abstand, Seitenverhältnis | TODO: Referenz nötig | |
-| Einstellungen: Eintragshöhe (1- / 2-zeilig), Gruppenabstand | TODO: Referenz nötig | |
+| Stufe | Radius (dp) | Squircle / Exponent | Verwendet in | Quelle |
+|---|---|---|---|---|
+| XS–XXL (Anzahl Stufen offen) | TODO: Referenz nötig | TODO: Referenz nötig | | |
 
-## 7. Icons
+### 4.4 Spacing-System
 
-| Wert | Ausprägung | Quelle |
-|---|---|---|
-| App-Icon: Keyline-Raster, Inhaltsfläche | TODO: Referenz nötig | |
-| App-Icon: Gradient-Stil (Richtung, Stops) | TODO: Referenz nötig | |
-| System-Icons: Strichstärke (dp) | TODO: Referenz nötig | |
-| System-Icons: Ecken / Enden (rund / eckig) | TODO: Referenz nötig | |
-| System-Icons: Gefüllt vs. Kontur je Zustand | TODO: Referenz nötig | |
-| Badge: Größe, Position, Zahl ja/nein | TODO: Referenz nötig | |
-| Akku-Icon: Form, Prozent innen/außen, Laden-Zustand | TODO: Referenz nötig | |
+Grundeinheit und Stufen: TODO: Referenz nötig.
 
-Alle Icons werden selbst gezeichnet (Compose-Paths / Vector Drawables). Es werden keine Original-Ressourcen verwendet.
+### 4.5 Schatten- und Glow-Stufen
 
-## 8. Motion-Tokens
-
-Spring-Notation: `stiffness`, `dampingRatio`. Tween-Notation: Dauer + `cubic-bezier(x1, y1, x2, y2)`.
-
-| Token | Typ | Dauer (ms) | Kurve / Feder | Fit-Fehler | Quelle |
+| Stufe | Offset | Radius | Alpha | Farbe | Quelle |
 |---|---|---|---|---|---|
-| `lock.unlock.settle` (nach Loslassen) | TODO: Referenz nötig | | | | |
-| `lock.unlock.cancel` (Rückfedern) | TODO: Referenz nötig | | | | |
-| `lock.toHome.wallpaperZoom` | TODO: Referenz nötig | | | | |
-| `lock.notification.enter` / `.exit` | TODO: Referenz nötig | | | | |
-| `lock.pin.keyPress` / `.errorShake` | TODO: Referenz nötig | | | | |
-| `lock.aod.wake` | TODO: Referenz nötig | | | | |
-| `shade.open` / `.close` | TODO: Referenz nötig | | | | |
-| `cc.open` / `.close` | TODO: Referenz nötig | | | | |
-| `cc.tile.stagger` (Verzögerung je Kachel) | TODO: Referenz nötig | | | | |
-| `cc.tile.toggle` (Farbe, Skalierung) | TODO: Referenz nötig | | | | |
-| `cc.tile.press` (Skalierung) | TODO: Referenz nötig | | | | |
-| `cc.slider.press` / `.iconMorph` | TODO: Referenz nötig | | | | |
-| `cc.edit.reflow` | TODO: Referenz nötig | | | | |
-| `home.page.settle` | TODO: Referenz nötig | | | | |
-| `app.open` (Icon → Fenster) | TODO: Referenz nötig | | | | |
-| `app.close` (Fenster → Icon) | TODO: Referenz nötig | | | | |
-| `folder.open` / `.close` | TODO: Referenz nötig | | | | |
-| `drawer.open` / `.close` | TODO: Referenz nötig | | | | |
-| `icon.drag.lift` / `.drop` | TODO: Referenz nötig | | | | |
-| `editMode.jiggle` (Amplitude °, Periode) | TODO: Referenz nötig | | | | |
-| `recents.enter` / `.exit` | TODO: Referenz nötig | | | | |
-| `recents.card.dismiss` | TODO: Referenz nötig | | | | |
-| `recents.clearAll` (Stagger) | TODO: Referenz nötig | | | | |
-| `dialog.enter` / `.exit` | TODO: Referenz nötig | | | | |
-| `sheet.enter` / `.exit` | TODO: Referenz nötig | | | | |
-| `switch.toggle` | TODO: Referenz nötig | | | | |
-| `list.overscroll` | TODO: Referenz nötig | | | | |
-| `volume.enter` / `.expand` / `.exit` | TODO: Referenz nötig | | | | |
+| (Anzahl offen) | TODO: Referenz nötig | | | | |
 
-## 9. Gesten-Parameter
+### 4.6 Glas-Presets (Modul `:glass`)
 
-| Parameter | Wert | Quelle |
+| Preset | Blur (dp) | Sättigung | Helligkeit | Tint + Alpha | Rauschen | Kantenlicht | Fallback API 29–32 | Quelle |
+|---|---|---|---|---|---|---|---|---|
+| Panel (CC, Benachrichtigungsleiste) | TODO: Referenz nötig | | | | | | Fläche + Kantenlinie | §6, §7 |
+| Kachel | TODO: Referenz nötig | | | | | | Fläche + Kantenlinie | §7 |
+| Ordner | TODO: Referenz nötig | | | | | | Fläche + Kantenlinie | §8 |
+| Dock | TODO: Referenz nötig | | | | | | Fläche + Kantenlinie | §8 |
+| Nav-Kapsel | TODO: Referenz nötig | | | | | | Fläche + Kantenlinie | §11 |
+| Island | TODO: Referenz nötig | | | | | | Fläche + Kantenlinie | §5, §6 |
+
+### 4.7 Icon-Stil
+
+| Merkmal | Wert | Quelle |
 |---|---|---|
-| Entsperren: Distanz-Schwelle (Anteil Höhe) | TODO: Referenz nötig | |
-| Entsperren: Fling-Schwelle (dp/s) | TODO: Referenz nötig | |
-| Rubber-Band-Funktion (Widerstand über Strecke) | TODO: Referenz nötig | |
-| Pull-Down: Trennlinie links/rechts (x-Anteil) | TODO: Referenz nötig | |
-| Pull-Down: Mitlauffaktor Finger → Inhalt | TODO: Referenz nötig | |
-| Seitenwechsel: Distanz- / Fling-Schwelle | TODO: Referenz nötig | |
-| Schublade: Wisch-nach-oben-Schwelle | TODO: Referenz nötig | |
-| Recents: Auslöser (Pause / Geschwindigkeit) | TODO: Referenz nötig | |
-| Zurück-Geste: Vorschau-Skalierung, Randbreite | TODO: Referenz nötig | |
-| Long-Press-Dauer (Shortcuts, Kacheln, Icons) | TODO: Referenz nötig | |
+| App-Icon-Maske (Form, Exponent) | TODO: Referenz nötig | |
+| Icon-Größen | TODO: Referenz nötig | |
+| System-Icons: Strichstärke, Enden | TODO: Referenz nötig | |
+| Licht-/Schatten-Verlauf | TODO: Referenz nötig | |
 
-## 10. Haptik
+Alle Icons sind selbst gezeichnet. Fremde Open-Source-Icons kommen nur mit Eintrag in `LICENSES.md` ins Projekt.
 
-Haptik lässt sich nicht aufnehmen. Die Werte kommen aus deiner Beschreibung (wo spürbar, kurz/lang, stark/schwach) und werden auf Android-Konstanten abgebildet.
+### 4.8 Haptik (Aktion → Typ)
 
-| Stelle | Eindruck (Beschreibung) | Android-Abbildung | Quelle |
+Haptik lässt sich nicht aufnehmen. Grundlage ist deine Beschreibung in `system-panels/haptics.md`.
+
+| Aktion | Wahrnehmung | Android-Abbildung | Quelle |
 |---|---|---|---|
 | Entsperr-Schwelle erreicht | TODO: Referenz nötig | | |
 | Kachel an/aus | TODO: Referenz nötig | | |
-| Slider Anschlag / Raster | TODO: Referenz nötig | | |
+| Slider-Anschlag | TODO: Referenz nötig | | |
 | Long-Press Icon / Shortcut | TODO: Referenz nötig | | |
-| Icon über Ordner / Drop | TODO: Referenz nötig | | |
+| Flux-Resize Rasterstufe | TODO: Referenz nötig | | |
+| Drop / Ordner bilden | TODO: Referenz nötig | | |
 | Recents-Karte geschlossen | TODO: Referenz nötig | | |
-| Buchstaben-Leiste in der Schublade | TODO: Referenz nötig | | |
-| PIN-Taste / Fehler | TODO: Referenz nötig | | |
+| Alphabetleiste | TODO: Referenz nötig | | |
+| PIN-Taste / Fehleingabe | TODO: Referenz nötig | | |
+| Zurück-Geste Schwelle | TODO: Referenz nötig | | |
 
-## 11. Layout je Screen
+## 5. Lockscreen und AOD
 
-Jeder Screen bekommt eine Tabelle mit Positionen (Abstand von oben/unten in dp), sobald Screenshots vorliegen.
+### AOD (Hell)
+- Quelle: — (erwartet: `lockscreen/aod_dark.png`, `lockscreen/aod_to_lock_tap.mp4`, `lockscreen/aod_to_lock_swipe.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `aodWake`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
 
-- **Lockscreen:** Uhr-Oberkante und Grundlinie, Datum, Infozeile, Start des Benachrichtigungsstapels, Shortcuts (Position, Größe, Treffer-Fläche), Entsperr-Hinweis, Querformat-Anordnung — TODO: Referenz nötig.
-- **Statusleiste:** Uhr-Position, Icon-Reihenfolge, Icon-Größe und Abstand, Kamera-Aussparung — TODO: Referenz nötig.
-- **Benachrichtigungsleiste:** Kopfbereich, Kartenstapel, Gruppen-Darstellung, „Alle löschen“ — TODO: Referenz nötig.
-- **Kontrollzentrum:** Kopfbereich, Kachelraster, Slider-Position, Medienkarte, Verbindungskarte — TODO: Referenz nötig.
-- **Homescreen:** Raster-Ursprung, Widget-Zellen, Seitenindikator, Dock — TODO: Referenz nötig.
-- **Ordner:** Panel-Position, Titel, Raster, Seitenindikator — TODO: Referenz nötig.
-- **Schublade:** Suchfeld, Kategorien, Buchstaben-Leiste — TODO: Referenz nötig.
-- **Recents:** Kartenposition, App-Icon/-Titel über der Karte, „Alle löschen“ — TODO: Referenz nötig.
-- **Lautstärke-Panel, Ausschalt-Menü, Dialog, Bottom-Sheet, Einstellungen** — TODO: Referenz nötig.
+### AOD (Dunkel)
+- Quelle: — (erwartet: `lockscreen/aod_dark.png`, `lockscreen/aod_to_lock_tap.mp4`, `lockscreen/aod_to_lock_swipe.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `aodWake`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lockscreen-Layout (Hell)
+- Quelle: — (erwartet: `lockscreen/lock_light.png`, `lockscreen/clock_landscape.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lockscreen-Layout (Dunkel)
+- Quelle: — (erwartet: `lockscreen/lock_dark.png`, `lockscreen/clock_landscape.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Uhr – gestreckter Stil (Hell)
+- Quelle: — (erwartet: `lockscreen/clock_<stil>.png`, `lockscreen/clock_contrast.png`, `lockscreen/clock_landscape.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Uhr – gestreckter Stil (Dunkel)
+- Quelle: — (erwartet: `lockscreen/clock_<stil>.png`, `lockscreen/clock_contrast.png`, `lockscreen/clock_landscape.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Uhr – Live Clock (Hell)
+- Quelle: — (erwartet: `lockscreen/clock_<stil>.png`, `lockscreen/clock_live.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `wallpaperParallax`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Uhr – Live Clock (Dunkel)
+- Quelle: — (erwartet: `lockscreen/clock_<stil>.png`, `lockscreen/clock_live.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `wallpaperParallax`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Uhr – transparentes Uhr-Widget (Hell)
+- Quelle: — (erwartet: `lockscreen/clock_<stil>.png`, `lockscreen/clock_contrast.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Uhr – transparentes Uhr-Widget (Dunkel)
+- Quelle: — (erwartet: `lockscreen/clock_<stil>.png`, `lockscreen/clock_contrast.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Datum- und Infozeile (Hell)
+- Quelle: — (erwartet: `lockscreen/lock_light.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Datum- und Infozeile (Dunkel)
+- Quelle: — (erwartet: `lockscreen/lock_dark.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Tiefeneffekt (Motiv vor Uhr) (Hell)
+- Quelle: — (erwartet: `lockscreen/depth_effect.png`, `lockscreen/parallax.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `wallpaperParallax`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Tiefeneffekt (Motiv vor Uhr) (Dunkel)
+- Quelle: — (erwartet: `lockscreen/depth_effect.png`, `lockscreen/parallax.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `wallpaperParallax`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Video-Wallpaper (Hell)
+- Quelle: — (erwartet: `lockscreen/video_wallpaper.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `videoWallpaperTransition`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Video-Wallpaper (Dunkel)
+- Quelle: — (erwartet: `lockscreen/video_wallpaper.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `videoWallpaperTransition`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lockscreen-Widgets (Hell)
+- Quelle: — (erwartet: `lockscreen/widgets.png`, `lockscreen/widgets_edit.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `lockWidgetEdit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lockscreen-Widgets (Dunkel)
+- Quelle: — (erwartet: `lockscreen/widgets.png`, `lockscreen/widgets_edit.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `lockWidgetEdit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Shortcuts links/rechts (Hell)
+- Quelle: — (erwartet: `lockscreen/shortcuts.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `lockShortcutPress`, `lockShortcutTrigger`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Shortcuts links/rechts (Dunkel)
+- Quelle: — (erwartet: `lockscreen/shortcuts.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `lockShortcutPress`, `lockShortcutTrigger`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lockscreen Island – Pille (Hell)
+- Quelle: — (erwartet: `lockscreen/island_pill.png`, `lockscreen/island_expand.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `lockIslandExpand`, `lockIslandCollapse`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lockscreen Island – Pille (Dunkel)
+- Quelle: — (erwartet: `lockscreen/island_pill.png`, `lockscreen/island_expand.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `lockIslandExpand`, `lockIslandCollapse`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lockscreen Island – Vollbild-Player und Lyrics (Hell)
+- Quelle: — (erwartet: `lockscreen/island_player.png`, `lockscreen/island_lyrics.png`, `lockscreen/island_expand.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `lockIslandExpand`, `lockIslandCollapse`, `lyricsLineChange`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lockscreen Island – Vollbild-Player und Lyrics (Dunkel)
+- Quelle: — (erwartet: `lockscreen/island_player.png`, `lockscreen/island_lyrics.png`, `lockscreen/island_expand.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `lockIslandExpand`, `lockIslandCollapse`, `lyricsLineChange`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lockscreen-Benachrichtigungskarte (Hell)
+- Quelle: — (erwartet: `lockscreen/notifications.png`, `lockscreen/notifications_hidden.png`, `lockscreen/notification_arrive.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `lockNotificationEnter`, `lockNotificationExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lockscreen-Benachrichtigungskarte (Dunkel)
+- Quelle: — (erwartet: `lockscreen/notifications.png`, `lockscreen/notifications_hidden.png`, `lockscreen/notification_arrive.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `lockNotificationEnter`, `lockNotificationExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Entsperren und Wallpaper-Übergang AOD → Lockscreen → Homescreen (Hell)
+- Quelle: — (erwartet: `lockscreen/aod_lock_home.mp4`, `lockscreen/unlock_slow.mp4`, `lockscreen/unlock_fling.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `aodWake`, `unlockDrag`, `unlockWallpaper`, `unlockCancel`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Entsperren und Wallpaper-Übergang AOD → Lockscreen → Homescreen (Dunkel)
+- Quelle: — (erwartet: `lockscreen/aod_lock_home.mp4`, `lockscreen/unlock_slow.mp4`, `lockscreen/unlock_fling.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `aodWake`, `unlockDrag`, `unlockWallpaper`, `unlockCancel`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Authentifizierung – PIN (Hell)
+- Quelle: — (erwartet: `lockscreen/auth_pin.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `authEnter`, `pinKeyPress`, `authError`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Authentifizierung – PIN (Dunkel)
+- Quelle: — (erwartet: `lockscreen/auth_pin.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `authEnter`, `pinKeyPress`, `authError`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Authentifizierung – Muster (Hell)
+- Quelle: — (erwartet: `lockscreen/auth_pattern.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `authEnter`, `patternDotHit`, `authError`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Authentifizierung – Muster (Dunkel)
+- Quelle: — (erwartet: `lockscreen/auth_pattern.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `authEnter`, `patternDotHit`, `authError`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Authentifizierung – Passwort (Hell)
+- Quelle: — (erwartet: `lockscreen/auth_password.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `authEnter`, `authError`, `keyboardInset`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Authentifizierung – Passwort (Dunkel)
+- Quelle: — (erwartet: `lockscreen/auth_password.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `authEnter`, `authError`, `keyboardInset`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Fingerabdruck-Animation (Hell)
+- Quelle: — (erwartet: `lockscreen/auth_fingerprint.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `fingerprintAuth`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Fingerabdruck-Animation (Dunkel)
+- Quelle: — (erwartet: `lockscreen/auth_fingerprint.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `fingerprintAuth`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Gesichtserkennungs-Animation (Hell)
+- Quelle: — (erwartet: `lockscreen/auth_face.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `faceAuth`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Gesichtserkennungs-Animation (Dunkel)
+- Quelle: — (erwartet: `lockscreen/auth_face.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `faceAuth`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lade-Animation (Hell)
+- Quelle: — (erwartet: `lockscreen/charging.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `chargingStart`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lade-Animation (Dunkel)
+- Quelle: — (erwartet: `lockscreen/charging.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `chargingStart`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+## 6. Statusleiste, Island, Benachrichtigungsleiste
+
+### Statusleiste (Hell)
+- Quelle: — (erwartet: `statusbar-shade/statusbar_<zustand>.png`, `statusbar-shade/statusbar_change.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `statusIconChange`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Statusleiste (Dunkel)
+- Quelle: — (erwartet: `statusbar-shade/statusbar_<zustand>.png`, `statusbar-shade/statusbar_change.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `statusIconChange`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Island-Benachrichtigung – kompakt (Hell)
+- Quelle: — (erwartet: `statusbar-shade/island_notification.mp4`, `statusbar-shade/island_multi.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `islandAppear`, `islandCollapse`, `islandDismiss`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Island-Benachrichtigung – kompakt (Dunkel)
+- Quelle: — (erwartet: `statusbar-shade/island_notification.mp4`, `statusbar-shade/island_multi.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `islandAppear`, `islandCollapse`, `islandDismiss`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Island-Benachrichtigung – expandiert (Hell)
+- Quelle: — (erwartet: `statusbar-shade/island_notification.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `islandExpand`, `islandCollapse`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Island-Benachrichtigung – expandiert (Dunkel)
+- Quelle: — (erwartet: `statusbar-shade/island_notification.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `islandExpand`, `islandCollapse`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Benachrichtigungsleiste – Hintergrund und Layout (Hell)
+- Quelle: — (erwartet: `statusbar-shade/shade_light.png`, `statusbar-shade/shade_checker.png`, `statusbar-shade/shade_pull_slow.mp4`, `statusbar-shade/shade_pull_fling.mp4`, `statusbar-shade/shade_zones.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `shadeOpen`, `shadeClose`, `shadeBlurRamp`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Benachrichtigungsleiste – Hintergrund und Layout (Dunkel)
+- Quelle: — (erwartet: `statusbar-shade/shade_dark.png`, `statusbar-shade/shade_checker.png`, `statusbar-shade/shade_pull_slow.mp4`, `statusbar-shade/shade_pull_fling.mp4`, `statusbar-shade/shade_zones.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `shadeOpen`, `shadeClose`, `shadeBlurRamp`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Benachrichtigungskarte (Hell)
+- Quelle: — (erwartet: `statusbar-shade/shade_light.png`, `statusbar-shade/shade_stack.mp4`, `statusbar-shade/shade_swipe.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `notificationStackScroll`, `notificationDismiss`, `notificationSnapBack`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Benachrichtigungskarte (Dunkel)
+- Quelle: — (erwartet: `statusbar-shade/shade_dark.png`, `statusbar-shade/shade_stack.mp4`, `statusbar-shade/shade_swipe.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `notificationStackScroll`, `notificationDismiss`, `notificationSnapBack`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Benachrichtigungsgruppe (Hell)
+- Quelle: — (erwartet: `statusbar-shade/shade_stack.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `notificationGroupExpand`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Benachrichtigungsgruppe (Dunkel)
+- Quelle: — (erwartet: `statusbar-shade/shade_stack.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `notificationGroupExpand`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### „Alle löschen“ (Benachrichtigungen) (Hell)
+- Quelle: — (erwartet: `statusbar-shade/shade_clear_all.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `notificationClearAll`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### „Alle löschen“ (Benachrichtigungen) (Dunkel)
+- Quelle: — (erwartet: `statusbar-shade/shade_clear_all.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `notificationClearAll`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+## 7. Kontrollzentrum
+
+### Kontrollzentrum – Hintergrund und Layout (Hell)
+- Quelle: — (erwartet: `control-center/cc_light.png`, `control-center/cc_checker.png`, `control-center/cc_open_slow.mp4`, `control-center/cc_open_fling.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `controlCenterOpen`, `controlCenterClose`, `controlCenterStagger`, `controlCenterBlurRamp`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Kontrollzentrum – Hintergrund und Layout (Dunkel)
+- Quelle: — (erwartet: `control-center/cc_dark.png`, `control-center/cc_checker.png`, `control-center/cc_open_slow.mp4`, `control-center/cc_open_fling.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `controlCenterOpen`, `controlCenterClose`, `controlCenterStagger`, `controlCenterBlurRamp`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Kachel klein (Hell)
+- Quelle: — (erwartet: `control-center/cc_light.png`, `control-center/cc_toggle.mp4`, `control-center/cc_press_hold.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `tilePress`, `tileToggle`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Kachel klein (Dunkel)
+- Quelle: — (erwartet: `control-center/cc_dark.png`, `control-center/cc_toggle.mp4`, `control-center/cc_press_hold.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `tilePress`, `tileToggle`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Kachel groß (Hell)
+- Quelle: — (erwartet: `control-center/cc_light.png`, `control-center/cc_toggle.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `tilePress`, `tileToggle`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Kachel groß (Dunkel)
+- Quelle: — (erwartet: `control-center/cc_dark.png`, `control-center/cc_toggle.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `tilePress`, `tileToggle`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Helligkeits-Slider (Hell)
+- Quelle: — (erwartet: `control-center/cc_light.png`, `control-center/cc_brightness.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `sliderPress`, `sliderDrag`, `sliderIconMorph`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Helligkeits-Slider (Dunkel)
+- Quelle: — (erwartet: `control-center/cc_dark.png`, `control-center/cc_brightness.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `sliderPress`, `sliderDrag`, `sliderIconMorph`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lautstärke-Slider (Hell)
+- Quelle: — (erwartet: `control-center/cc_light.png`, `control-center/cc_volume.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `sliderPress`, `sliderDrag`, `sliderIconMorph`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lautstärke-Slider (Dunkel)
+- Quelle: — (erwartet: `control-center/cc_dark.png`, `control-center/cc_volume.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `sliderPress`, `sliderDrag`, `sliderIconMorph`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Medienkarte (Hell)
+- Quelle: — (erwartet: `control-center/cc_media.png`, `control-center/cc_media.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `mediaCardControl`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Medienkarte (Dunkel)
+- Quelle: — (erwartet: `control-center/cc_media.png`, `control-center/cc_media.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `mediaCardControl`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Verbindungskarte (Hell)
+- Quelle: — (erwartet: `control-center/cc_light.png`, `control-center/cc_connectivity.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `connectivityExpand`, `connectivityCollapse`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Verbindungskarte (Dunkel)
+- Quelle: — (erwartet: `control-center/cc_dark.png`, `control-center/cc_connectivity.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `connectivityExpand`, `connectivityCollapse`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Geräte-Panel (Hell)
+- Quelle: — (erwartet: `control-center/cc_devices.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `devicePanelOpen`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Geräte-Panel (Dunkel)
+- Quelle: — (erwartet: `control-center/cc_devices.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `devicePanelOpen`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Bearbeiten-Modus (Hell)
+- Quelle: — (erwartet: `control-center/cc_edit.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `ccEditEnter`, `ccEditDrag`, `ccEditResize`, `ccEditReflow`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Bearbeiten-Modus (Dunkel)
+- Quelle: — (erwartet: `control-center/cc_edit.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `ccEditEnter`, `ccEditDrag`, `ccEditResize`, `ccEditReflow`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Multicolor-Variante (Hell)
+- Quelle: — (erwartet: `control-center/cc_multicolor.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Multicolor-Variante (Dunkel)
+- Quelle: — (erwartet: `control-center/cc_multicolor.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+## 8. Homescreen (Flux Home)
+
+### Homescreen-Raster (Hell)
+- Quelle: — (erwartet: `home/home_light.png`, `home/home_checker.png`, `home/launcher_settings.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Homescreen-Raster (Dunkel)
+- Quelle: — (erwartet: `home/home_dark.png`, `home/home_checker.png`, `home/launcher_settings.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Seitenwechsel und Seitenindikator (Hell)
+- Quelle: — (erwartet: `home/home_page_swipe.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `homePageSettle`, `homePageRubberBand`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Seitenwechsel und Seitenindikator (Dunkel)
+- Quelle: — (erwartet: `home/home_page_swipe.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `homePageSettle`, `homePageRubberBand`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### App-Icon (Hell)
+- Quelle: — (erwartet: `home/home_light.png`, `home/flux_shapes.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `iconPress`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### App-Icon (Dunkel)
+- Quelle: — (erwartet: `home/home_dark.png`, `home/flux_shapes.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `iconPress`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Flux-Home-Formen (Icon-Resize) (Hell)
+- Quelle: — (erwartet: `home/flux_shapes.png`, `home/flux_resize.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `fluxResize`, `fluxReflow`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Flux-Home-Formen (Icon-Resize) (Dunkel)
+- Quelle: — (erwartet: `home/flux_shapes.png`, `home/flux_resize.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `fluxResize`, `fluxReflow`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Ordner-Icon (Hell)
+- Quelle: — (erwartet: `home/folder.png`, `home/flux_shapes.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `fluxResize`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Ordner-Icon (Dunkel)
+- Quelle: — (erwartet: `home/folder.png`, `home/flux_shapes.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `fluxResize`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Ordner offen (Hell)
+- Quelle: — (erwartet: `home/folder_open_light.png`, `home/folder_open_close.mp4`, `home/folder_pages.mp4`, `home/folder_rename.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `folderExpand`, `folderCollapse`, `folderPageSettle`, `keyboardInset`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Ordner offen (Dunkel)
+- Quelle: — (erwartet: `home/folder_open_dark.png`, `home/folder_open_close.mp4`, `home/folder_pages.mp4`, `home/folder_rename.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `folderExpand`, `folderCollapse`, `folderPageSettle`, `keyboardInset`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Wackelmodus und Drag-and-Drop (Hell)
+- Quelle: — (erwartet: `home/jiggle_drag.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `editModeEnter`, `jiggle`, `iconDragLift`, `iconDrop`, `folderCreate`, `dragPageEdge`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Wackelmodus und Drag-and-Drop (Dunkel)
+- Quelle: — (erwartet: `home/jiggle_drag.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `editModeEnter`, `jiggle`, `iconDragLift`, `iconDrop`, `folderCreate`, `dragPageEdge`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Widget (Hell)
+- Quelle: — (erwartet: `home/home_light.png`, `home/widget_add_resize.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `widgetAdd`, `widgetResize`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Widget (Dunkel)
+- Quelle: — (erwartet: `home/home_dark.png`, `home/widget_add_resize.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `widgetAdd`, `widgetResize`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Dock (Hell)
+- Quelle: — (erwartet: `home/home_light.png`, `home/home_checker.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Dock (Dunkel)
+- Quelle: — (erwartet: `home/home_dark.png`, `home/home_checker.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Suchleiste (Hell)
+- Quelle: — (erwartet: `home/home_light.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `searchOpen`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Suchleiste (Dunkel)
+- Quelle: — (erwartet: `home/home_dark.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `searchOpen`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Contour-Glow (Hell)
+- Quelle: — (erwartet: `home/contour_glow.mp4`, `home/glow_off.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `contourGlowLoop`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Contour-Glow (Dunkel)
+- Quelle: — (erwartet: `home/contour_glow.mp4`, `home/glow_off.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `contourGlowLoop`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+## 9. App-Schublade und Suche
+
+### App-Schublade (Hell)
+- Quelle: — (erwartet: `drawer-search/drawer_light.png`, `drawer-search/drawer_open.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `drawerOpen`, `drawerClose`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### App-Schublade (Dunkel)
+- Quelle: — (erwartet: `drawer-search/drawer_dark.png`, `drawer-search/drawer_open.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `drawerOpen`, `drawerClose`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Alphabetleiste und Kategorien (Hell)
+- Quelle: — (erwartet: `drawer-search/drawer_alphabet.mp4`, `drawer-search/drawer_categories.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `alphabetScrub`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Alphabetleiste und Kategorien (Dunkel)
+- Quelle: — (erwartet: `drawer-search/drawer_alphabet.mp4`, `drawer-search/drawer_categories.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `alphabetScrub`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Suche (Hell)
+- Quelle: — (erwartet: `drawer-search/search.mp4`, `drawer-search/search_results.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `searchOpen`, `searchResultsEnter`, `keyboardInset`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Suche (Dunkel)
+- Quelle: — (erwartet: `drawer-search/search.mp4`, `drawer-search/search_results.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `searchOpen`, `searchResultsEnter`, `keyboardInset`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+## 10. Recents / Multitasking
+
+### Recents-Übersicht (Hell)
+- Quelle: — (erwartet: `recents/recents_light.png`, `recents/recents_enter.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `recentsEnter`, `recentsExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Recents-Übersicht (Dunkel)
+- Quelle: — (erwartet: `recents/recents_dark.png`, `recents/recents_enter.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `recentsEnter`, `recentsExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Recents-Karte (Hell)
+- Quelle: — (erwartet: `recents/recents_light.png`, `recents/recents_dismiss.mp4`, `recents/recents_quick_switch.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `recentsCardDismiss`, `recentsCardSnapBack`, `quickSwitch`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Recents-Karte (Dunkel)
+- Quelle: — (erwartet: `recents/recents_dark.png`, `recents/recents_dismiss.mp4`, `recents/recents_quick_switch.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `recentsCardDismiss`, `recentsCardSnapBack`, `quickSwitch`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### „Alle löschen“ (Recents) (Hell)
+- Quelle: — (erwartet: `recents/recents_clear_all.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `recentsClearAll`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### „Alle löschen“ (Recents) (Dunkel)
+- Quelle: — (erwartet: `recents/recents_clear_all.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `recentsClearAll`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+## 11. Navigation
+
+### Gesten-Navigationsleiste (Hell)
+- Quelle: — (erwartet: `nav/nav_pill.png`, `nav/home_gesture.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `homeGesture`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Gesten-Navigationsleiste (Dunkel)
+- Quelle: — (erwartet: `nav/nav_pill.png`, `nav/home_gesture.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `homeGesture`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Schwebende Kapsel-Navigation (Hell)
+- Quelle: — (erwartet: `nav/capsule_light.png`, `nav/capsule_transition.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `navCapsuleTransition`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Schwebende Kapsel-Navigation (Dunkel)
+- Quelle: — (erwartet: `nav/capsule_dark.png`, `nav/capsule_transition.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `navCapsuleTransition`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Predictive Back (Hell)
+- Quelle: — (erwartet: `nav/back_preview.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `predictiveBackDrag`, `backCommit`, `backCancel`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Predictive Back (Dunkel)
+- Quelle: — (erwartet: `nav/back_preview.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `predictiveBackDrag`, `backCommit`, `backCancel`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+## 12. App-Übergänge
+
+### App-Start aus Icon (Hell)
+- Quelle: — (erwartet: `app-transitions/launch_icon.mp4`, `app-transitions/launch_interrupt.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `appLaunch`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### App-Start aus Icon (Dunkel)
+- Quelle: — (erwartet: `app-transitions/launch_icon.mp4`, `app-transitions/launch_interrupt.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `appLaunch`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### App-Rückkehr ins Icon (Hell)
+- Quelle: — (erwartet: `app-transitions/close_icon.mp4`, `app-transitions/launch_interrupt.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `appClose`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### App-Rückkehr ins Icon (Dunkel)
+- Quelle: — (erwartet: `app-transitions/close_icon.mp4`, `app-transitions/launch_interrupt.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `appClose`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### App-Start und -Rückkehr aus Ordner (Hell)
+- Quelle: — (erwartet: `app-transitions/launch_folder.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `appLaunchFromFolder`, `appCloseToFolder`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### App-Start und -Rückkehr aus Ordner (Dunkel)
+- Quelle: — (erwartet: `app-transitions/launch_folder.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `appLaunchFromFolder`, `appCloseToFolder`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### App-Start aus Recents (Hell)
+- Quelle: — (erwartet: `app-transitions/launch_recents.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `appLaunchFromRecents`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### App-Start aus Recents (Dunkel)
+- Quelle: — (erwartet: `app-transitions/launch_recents.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `appLaunchFromRecents`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+## 13. Weitere Oberflächen
+
+### Lautstärke-Panel (Hell)
+- Quelle: — (erwartet: `system-panels/volume.png`, `system-panels/volume.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `volumeEnter`, `volumeExpand`, `volumeExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Lautstärke-Panel (Dunkel)
+- Quelle: — (erwartet: `system-panels/volume.png`, `system-panels/volume.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `volumeEnter`, `volumeExpand`, `volumeExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Ausschalt-Menü (Hell)
+- Quelle: — (erwartet: `system-panels/power_menu.png`, `system-panels/power_menu.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `powerMenuEnter`, `powerMenuExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Ausschalt-Menü (Dunkel)
+- Quelle: — (erwartet: `system-panels/power_menu.png`, `system-panels/power_menu.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `powerMenuEnter`, `powerMenuExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Dialog (Hell)
+- Quelle: — (erwartet: `system-panels/dialog_light.png`, `system-panels/dialog.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `dialogEnter`, `dialogExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Dialog (Dunkel)
+- Quelle: — (erwartet: `system-panels/dialog_dark.png`, `system-panels/dialog.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `dialogEnter`, `dialogExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Bottom-Sheet (Hell)
+- Quelle: — (erwartet: `system-panels/sheet_light.png`, `system-panels/sheet.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `sheetEnter`, `sheetDrag`, `sheetExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Bottom-Sheet (Dunkel)
+- Quelle: — (erwartet: `system-panels/sheet_dark.png`, `system-panels/sheet.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `sheetEnter`, `sheetDrag`, `sheetExit`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Switch (Hell)
+- Quelle: — (erwartet: `system-panels/switch.mp4`, `system-panels/settings_sub_light.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `switchToggle`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Switch (Dunkel)
+- Quelle: — (erwartet: `system-panels/switch.mp4`, `system-panels/settings_sub_dark.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `switchToggle`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Toggle-Button (Hell)
+- Quelle: — (erwartet: `system-panels/toggles.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `togglePress`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Toggle-Button (Dunkel)
+- Quelle: — (erwartet: `system-panels/toggles.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `togglePress`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Slider (Einstellungen) (Hell)
+- Quelle: — (erwartet: `system-panels/slider.mp4`, `system-panels/settings_sub_light.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `sliderPress`, `sliderDrag`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Slider (Einstellungen) (Dunkel)
+- Quelle: — (erwartet: `system-panels/slider.mp4`, `system-panels/settings_sub_dark.png`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `sliderPress`, `sliderDrag`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Einstellungsliste (Hell)
+- Quelle: — (erwartet: `system-panels/settings_main_light.png`, `system-panels/settings_sub_light.png`, `system-panels/settings_scroll.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `listOverscroll`, `largeTitleCollapse`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Einstellungsliste (Dunkel)
+- Quelle: — (erwartet: `system-panels/settings_main_dark.png`, `system-panels/settings_sub_dark.png`, `system-panels/settings_scroll.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `listOverscroll`, `largeTitleCollapse`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Tastatur-Übergang (Hell)
+- Quelle: — (erwartet: `system-panels/keyboard.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `keyboardInset`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)
+
+### Tastatur-Übergang (Dunkel)
+- Quelle: — (erwartet: `system-panels/keyboard.mp4`)
+- Maße (dp): TODO: Referenz nötig (Breite, Höhe, Abstände außen/innen, Raster, Safe-Area)
+- Eckenradien (dp): TODO: Referenz nötig (pro Ecke, Squircle ja/nein, Superellipse-Exponent)
+- Farben: TODO: Referenz nötig (Fläche, Tint, Text primär/sekundär, Akzent, aktiv/inaktiv; Hex + Alpha)
+- Glas: TODO: Referenz nötig (Blur-Radius dp, Sättigung, Helligkeit, Rauschen, Kantenlicht Farbe/Breite/Winkel)
+- Typografie: TODO: Referenz nötig (Familie Platzhalter, Größe sp, Gewicht, Laufweite, Zeilenhöhe)
+- Schatten/Glow: TODO: Referenz nötig (Offset, Radius, Alpha, Farbe)
+- Zustände: TODO: Referenz nötig (normal, gedrückt, aktiv, deaktiviert, Fokus)
+- Animationen: TODO: Referenz nötig (Dauer, Kurve/Feder, Delay/Stagger, Start-/Endwerte, Unterbrechbarkeit, Gestenverknüpfung; Tokens: `keyboardInset`)
+- Haptik: TODO: Referenz nötig (Auslöser, Typ)
+- Offen: TODO: Referenz nötig (alle Felder)

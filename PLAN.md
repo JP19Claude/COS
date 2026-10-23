@@ -1,115 +1,146 @@
 # PLAN
 
-Ziel: ein eigenes Android-Projekt (Kotlin, Jetpack Compose), das Gestaltung und Bewegung des Originals so genau wie möglich nachbildet. Es nutzt keine Original-Assets und trägt keine Marken. Alle Maße kommen aus [`DESIGN_SPEC.md`](DESIGN_SPEC.md), das Referenzmaterial liegt in [`reference/`](reference/README.md). Was technisch nicht geht, steht in [`LIMITATIONS.md`](LIMITATIONS.md).
+Ziel: Ein eigenes Android-Projekt (Kotlin, Jetpack Compose), das Aussehen, Layout, Bewegung und Haptik von ColorOS 17 so genau wie möglich nachbildet. Es nutzt keine Original-Assets und trägt keine Marken.
 
-## Stand und Blocker (2026-10-23)
+Alle Werte stehen in [`DESIGN_SPEC.md`](DESIGN_SPEC.md) und [`MOTION_TOKENS.md`](MOTION_TOKENS.md), das Referenzmaterial in [`reference/`](reference/INDEX.md). Was ohne Systemrechte nicht geht, steht in [`LIMITATIONS.md`](LIMITATIONS.md).
+
+## Stand und Blocker (2026-10-23, Ende Phase 0)
 
 | # | Blocker | Folge | Was hilft |
 |---|---|---|---|
-| 1 | `reference/` ist leer | Keine Messwerte. `DESIGN_SPEC.md` ist ein Skelett, alle Werte `TODO: Referenz nötig` | Material laut [`reference/README.md`](reference/README.md) |
-| 2 | Gerät und OS-Version unbekannt | Layout und Animationen unterscheiden sich zwischen Versionen stark | Modell, Version, `adb shell wm size`, `adb shell wm density` |
-| 3 | Netzwerk-Richtlinie dieser Cloud-Umgebung sperrt `dl.google.com` | Android SDK nicht installierbar, hier kein APK-Build. `maven.google.com` und Maven Central sind erreichbar | `dl.google.com` in den Umgebungs-Einstellungen unter *Network access → Allowed domains* freigeben. Alternative: Builds nur über GitHub Actions (langsamer) |
-| 4 | Kein KVM im Container | Kein Emulator hier | Screenshots per Roborazzi (Robolectric, läuft auf der JVM). Performance, Haptik und echte Gesten misst du auf dem Gerät mit Skripten, die ich liefere |
+| 1 | `reference/` ist leer (0 von 109 erwarteten Dateien) | Keine Messwerte. Alle Gerüste stehen auf `TODO: Referenz nötig` | Material laut [`reference/INDEX.md`](reference/INDEX.md), zuerst das ★-Set (28 Dateien) |
+| 2 | Gerät und ColorOS-17-Build unbekannt | dp-Umrechnung und Versionsstand offen | Kopfzeilen in `reference/INDEX.md` |
+| 3 | Die Netzwerk-Richtlinie dieser Cloud-Umgebung sperrt `dl.google.com`. Erreichbar sind `maven.google.com` und Maven Central | Android SDK nicht installierbar, hier kein APK-Build | `dl.google.com` unter *Network access → Allowed domains* freigeben. Sonst Builds nur über GitHub Actions |
+| 4 | Kein KVM im Container | Kein Emulator hier | Screenshots und Frame-Strips per Roborazzi (JVM). Emulator-Läufe eventuell in GitHub Actions ⚠. Performance und Haptik misst du auf dem Gerät |
 
 ## Architektur
 
 ```
-:app              Einstieg: HOME-Launcher-Activity und Demo-Shell (Fake-Lockscreen, Fake-Statusleiste, Overlays)
-:design-system    Tokens (Farben, Typo, Radien, Schatten, Blur, Motion, Haptik), Theme, Basis-Komponenten, Icons
-:common           Gesten-Physik (Rubber-Band, Snap/Fling, Velocity-Übergabe), Systemdaten (Zeit, Akku, Netz), Utilities
-:lockscreen       Lockscreen, Entsperr-Ablauf, PIN/Muster, AOD-Optik
-:control-center   Kontrollzentrum, Benachrichtigungsleiste, Statusleiste
-:launcher         Homescreen, Ordner, Schublade, Dock, Widgets, Drag-and-Drop
-:recents          Multitasking-Ansicht und App-Übergänge
-:benchmark        Macrobenchmark (läuft nur auf einem Gerät)
-tools/            Python: Frame-Extraktion, Kurven-Fit, Screenshot-Diff, Kalibrier-Wallpaper
+:glass            Backdrop-Blur, Tint, Sättigung, Rauschen, Kantenlicht, Contour-Glow; Presets aus DESIGN_SPEC §4.6
+:design-system    Theme, Farbrollen, Typo, Radien, Spacing, Schatten, Icons, Haptik, MotionTokens.kt;
+                  Komponenten: Switch, Toggle, Slider, Dialog, Bottom-Sheet, Liste, Island-Grundform
+:common           Gestenphysik (Rubber-Band, Snap/Fling, Velocity-Übergabe), gemeinsame Übergangszustände
+                  (z. B. Wallpaper-Fortschritt AOD→Lock→Home), Systemdaten (Zeit, Akku, Netz)
+:lockscreen       AOD, Lockscreen, Uhr-Stile, Live Clock, Widgets, Lockscreen Island, Entsperren, Authentifizierung
+:shade            Statusleiste, Island-Benachrichtigungen, Benachrichtigungsleiste, Lautstärke-Panel, Ausschalt-Menü
+:control-center   Kachelraster, Slider, Medien-, Verbindungs-, Geräte-Panel, Bearbeiten-Modus
+:launcher         Homescreen, Flux Home, Ordner, Widgets, Dock, Suchleiste, Schublade, Suche, App-Start
+:recents          Multitasking, Karten, Übergänge von/zur App
+:nav              Gesten-Leiste, Kapsel-Navigation, Predictive Back
+:app              Einstieg: HOME-Activity, Demo-Shell (simulierte Statusleiste und Systemdaten), Demo-Galerie, Demo-Apps
+:benchmark        Macrobenchmark (läuft auf dem Gerät)
+tools/            Python: Frame-Extraktion, Frame-Strips, Kurven-Fit, Pixel-/ΔE-Diff, Motion-Vergleich,
+                  Token-Generator (MOTION_TOKENS.md → MotionTokens.kt)
 ```
 
-Abhängigkeiten: Feature-Module → `:design-system`, `:common`. `:app` → alle. Feature-Module kennen einander nicht und kommunizieren über Interfaces in `:common`.
+`:app` und `:benchmark` kommen zu den Modulen aus dem Prompt hinzu. Ohne `:app` gibt es keine APK, und ohne `:benchmark` lässt sich die geforderte Macrobenchmark-Messung nicht durchführen.
 
-### Technische Leitlinien
+**Abhängigkeiten:** `:glass` ← `:design-system` ← Feature-Module. `:common` steht allen offen. Feature-Module kennen einander nicht. Gemeinsame Zustände wie der durchgehende Wallpaper-Übergang liegen in `:common`. Die Island-Grundform liegt in `:design-system`, weil Lockscreen und Benachrichtigungsleiste sie beide brauchen.
 
-- **Tokens nur aus der Spec.** `design-system/tokens/*` wird aus `DESIGN_SPEC.md` befüllt. Es gibt keine Zahlenliterale für Maße oder Dauern in Feature-Code.
-- **Ein Gestenmodell für alles.** Beim Ziehen wird `Animatable.snapTo()` im Pointer-Loop aufgerufen, gelesen wird nur in `graphicsLayer {}`. So gibt es keine Recomposition pro Frame. Beim Loslassen läuft `animateTo()` mit `initialVelocity` aus dem `VelocityTracker`. Ein neuer Finger stoppt die laufende Animation und übernimmt die aktuelle Position. Damit ist jede Animation unterbrechbar.
-- **Gesten-Entscheidungen als reines Kotlin.** Schwellen, Rubber-Band und Snap-Ziel sind Funktionen ohne Android-Abhängigkeit und werden per JVM-Unit-Test geprüft.
-- **Blur:** Ab API 31 `RenderEffect` über `graphicsLayer`. Im In-App-Nachbau gehört das Wallpaper uns. Deshalb sind für API 29–30 neben der vorgeschriebenen halbtransparenten Fläche auch vorberechnete, herunterskalierte Blur-Stufen möglich, die überblendet werden. Ob das gewünscht ist, entscheidest du.
-- **Screenshot-Vergleich:** Roborazzi rendert jeden Screen in fester Gerätegröße und Dichte (aus der Meta-Tabelle der Spec). `tools/diff.py` legt App und Referenz übereinander (Overlay, Differenzbild). Für Abweichungen in dp nutzt es Element-Rahmen: App-seitig exakt aus Compose-`testTag`-Bounds, referenzseitig einmal pro Screen in einer JSON-Datei annotiert. Zielwert ist < 2 dp auf den Hauptscreens.
-- **Performance:** Macrobenchmark mit `FrameTimingMetric` je Geste plus Perfetto-Trace-Konfiguration. Beides führst du auf dem Gerät aus, die Auswertung mache ich.
+## Technische Leitlinien
+
+- **Keine Magic Numbers.** `tools/` erzeugt `MotionTokens.kt` und die Design-Tokens aus den Markdown-Tabellen. Jedes Token trägt Quelle und Fit-Fehler als KDoc. Ungemessene Tokens heißen im Code sichtbar `Unmeasured` und stehen im Phasenbericht, damit nichts als gemessen durchgeht.
+- **Glas in drei Stufen:**
+  - **API 33+:** Blur plus AGSL-`RuntimeShader` für Kantenlicht, Refraktion, Contour-Glow und Reflexe.
+  - **API 31–32:** Blur per `RenderEffect`, Kantenlicht als statische Linie.
+  - **API 29–30:** halbtransparente Fläche plus feine Kantenlinie, jeweils mit gleicher Geometrie.
+  - In Phase A wird **Haze** (Version 2.0.1, Apache-2.0, auf Maven Central) gegen eine eigene `RenderEffect`-Kette verglichen. Kriterien: Kosten pro Frame bei mehreren Ebenen, Kontrolle über Sättigung, Rauschen und Tint, sowie Zusammenspiel mit AGSL. Die Entscheidung landet in diesem Plan, die Lizenz in `LICENSES.md`.
+- **Ein Gestenmodell für alles:**
+  - Beim Ziehen wird `Animatable.snapTo()` im Pointer-Loop aufgerufen, gelesen wird nur in `graphicsLayer {}`. So gibt es keine Recomposition pro Frame.
+  - Beim Loslassen läuft `animateTo()` mit der Geschwindigkeit aus dem `VelocityTracker`. Ein neuer Finger stoppt die laufende Animation und übernimmt sie ohne Sprung.
+  - Schwellen, Rubber-Band und Snap-Ziele sind reines Kotlin mit JVM-Unit-Tests.
+- **Durchgehender Wallpaper-Übergang:** Eine gemeinsame Fortschrittsvariable steuert AOD → Lockscreen → Homescreen (Skalierung, Blur, Helligkeit, Position). Lockscreen und Launcher lesen sie beide, so bleibt es eine kontinuierliche Animation.
+- **Pixelvergleich (`DIFF_REPORT.md`):**
+  - Roborazzi rendert jeden Zustand in der Auflösung und dpi des Referenzgeräts.
+  - App-seitig kommen die Element-Rahmen exakt aus Compose-`testTag`-Bounds, referenzseitig werden sie einmal pro Screen in JSON annotiert.
+  - Der Report nennt Abweichungen in dp und ΔE (CIEDE2000) außerhalb von Blur-Flächen. Ziele: < 2 dp, ΔE < 3.
+- **Animationsvergleich (`MOTION_REPORT.md`):**
+  - Die Compose-Testuhr wird in Schritten von 1/fps weitergeschaltet. Das liefert deterministische Frame-Strips der App.
+  - Gesten werden mit der Fingerbahn aus der Referenz („Berührungen anzeigen“) nachgespielt.
+  - Ziele: Fehler < 3 % des Wegs, Dauer < 1 Frame Abweichung.
+  - ⚠ Robolectric rendert Blur und AGSL eventuell nicht wie ein Gerät. Glasflächen werden deshalb zusätzlich mit Aufnahmen vom Gerät verglichen.
+- **Performance (`PERF.md`):** Macrobenchmark mit `FrameTimingMetric` je Geste plus Perfetto-Konfiguration. Ausgeführt wird auf deinem Gerät, die Auswertung mache ich. Blur-Flächen werden minimiert und gecacht.
+- **Barrierefreiheit:** TalkBack-Beschriftungen, Touch-Ziele von mindestens 48 dp, Kontrastprüfung im Diff-Skript. Reduce Motion folgt der System-Animator-Skala, das Verhalten laut `MOTION_TOKENS.md` (offen).
 
 ## Phasen
 
-Aufwand in Personentagen (PT) für eine erfahrene Person. Das sind grobe Bandbreiten, die genauer werden, sobald die Referenz vorliegt. Jede Phase endet mit einer lauffähigen Debug-APK, Screenshots, einem Diff-Report, der Liste offener `TODO: Referenz nötig`-Punkte und einem Commit.
+Aufwand in Personentagen (PT) für eine erfahrene Person. Das sind grobe Bandbreiten, die genauer werden, sobald Referenz vorliegt. Jede Phase endet mit:
+- lauffähiger Debug-APK und Screenshots,
+- `DIFF_REPORT.md` und `MOTION_REPORT.md`,
+- Liste offener `TODO: Referenz nötig`,
+- Commit und kurzem Bericht.
 
-### Phase 0 – Projekt und Mess-Werkzeuge (1–2 PT)
-- Gradle-Multi-Modul-Projekt, Version Catalog, Min SDK 29, Target aktuelles SDK, GitHub-Actions-Build mit APK als Artefakt.
-- `tools/`: Frame-Extraktion, Element-Tracking, Bezier-/Feder-Fit, Diff-Skript, Kalibrier-Wallpaper (schon da).
-- **Abnahme:** Leere App baut, ein Roborazzi-Screenshot läuft durch, CI liefert eine APK.
-- **Risiko:** Ohne Blocker 3 sind Builds nur über CI möglich.
+### Phase 0 – Gerüst (erledigt)
+`reference/INDEX.md` mit Lückenliste pro Ordner, Gerüste für `DESIGN_SPEC.md` (70 Komponenten, je Hell/Dunkel) und `MOTION_TOKENS.md` (104 Tokens, 13 Gesten-Parameter), `PLAN.md`, Entwurf von `LIMITATIONS.md`, Kalibrier-Wallpaper. **Stopp und Rückfrage.**
 
-### Phase A – Design-System und Motion-Tokens (5–8 PT)
-- Farben hell/dunkel, dynamische Akzentfarbe, Typo-Skala, Radien (inkl. Superellipse-Shape, falls gemessen), Schatten, Blur-Modifier mit Fallback, Haptik-Profile, Motion-Tokens.
-- Komponenten: Switch, Slider, Button, Karte, Listeneintrag, Dialog, Bottom-Sheet, Overscroll.
-- Selbst gezeichnete System-Icons (Statusleiste, CC, Navigation; ca. 40–60 Stück), App-Icon-Maske für fremde Adaptive Icons.
-- Gesten-Physik in `:common` mit Unit-Tests. Katalog-Screen mit allen Komponenten und Previews.
-- **Abnahme:** Katalog-Screen, Diff von Switch, Slider und Einstellungsliste gegen die Referenz.
-- **Risiko:** Die Platzhalter-Schrift hat andere Metriken als die Original-Schrift. Bei Text ist < 2 dp deshalb ggf. nicht erreichbar. Gegenmaßnahme: Schrift nach x-Höhe und Laufweite auswählen. Du kannst eine selbst lizenzierte Schrift in die Theme-Datei legen.
+### Phase A – `:glass` und `:design-system` (10–15 PT)
+- Gradle-Multi-Modul-Projekt mit Version Catalog, GitHub-Actions-Build mit APK als Artefakt.
+- `tools/`: Frame-Strips, Fit, Diff, Token-Generator.
+- Theme, Farbrollen, dynamischer Akzent aus dem Wallpaper, Typo-Skala inkl. Skalierung, Radien und Squircle-Shape, Spacing, Schatten/Glow, Haptik-Tabelle.
+- Glas-Presets (Panel, Kachel, Ordner, Dock, Nav-Kapsel, Island) in drei API-Stufen, Haze-Bewertung.
+- Selbst gezeichnete System-Icons, App-Icon-Maske. Komponenten: Switch, Toggle, Slider, Dialog, Bottom-Sheet mit Nested Scroll, Einstellungsliste.
+- Demo-Galerie aller Komponenten und Zustände, Previews, Unit-Tests der Gestenphysik. `LICENSES.md` ab der ersten fremden Ressource (Schrift, Haze).
+- **Risiken:**
+  - Die Platzhalter-Schrift hat andere Metriken als das Original, < 2 dp ist bei Text eventuell nicht erreichbar. Gegenmaßnahme: Auswahl nach x-Höhe. Eine eigene, lizenzierte Schrift ist austauschbar.
+  - Kantenlicht und Refraktion lassen sich aus Screenshots nur begrenzt messen. Reagiert das Licht auf Neigung, braucht es eine Aufnahme mit geneigtem Gerät.
 
-### Phase B – Lockscreen, In-App (8–12 PT)
-- Uhr-Varianten, Datum, Infozeile, Hoch-/Querformat.
-- Wallpaper-Parallax. Tiefeneffekt „Uhr hinter Motiv“ per ML Kit Subject Segmentation (braucht Google Play-Dienste auf dem Gerät), Fallback: manuell erstellte Maske.
-- Benachrichtigungen (zunächst Demo-Daten): Gruppierung, Karten, Ein-/Ausblenden, Inhalte verbergen.
-- Entsperren: Wisch mit Fingerfolge, Rubber-Band, Wallpaper-Zoom/Blur zum Home (bis Phase D ein Platzhalter-Home). PIN- und Muster-Ansicht, Biometrie-Optik.
-- Shortcuts unten mit Long-Press-Animation, AOD-Optik.
-- **Risiko:** Qualität der Segmentierung. Echte Biometrie zeigt immer die System-Oberfläche (siehe LIMITATIONS).
+### Phase B – Lockscreen und AOD (12–18 PT)
+- Uhr-Stile, Live Clock, transparentes Uhr-Widget, Kontrastlogik, Hoch-/Quer-/Faltformat.
+- Tiefeneffekt per ML Kit Subject Segmentation (braucht Google Play-Dienste), Fallback eigene Maske. Video-Wallpaper.
+- Durchgehender Übergang AOD → Lockscreen → Homescreen (bis Phase D mit Platzhalter-Home). Widgets, Shortcuts.
+- Lockscreen Island: Pille, Ziehen bis Vollbild-Player, Lyrics.
+- Gestapelte Benachrichtigungen, Entsperren mit Rubber-Band, PIN/Muster/Passwort, Fingerabdruck-, Gesichts- und Lade-Animation.
+- **Risiken:** Qualität der Segmentierung. Die Licht-und-Schatten-Animationen sind shader-lastig.
 
-### Phase C – Kontrollzentrum, Benachrichtigungsleiste, Statusleiste (10–15 PT)
-- Fake-Statusleiste mit echten Daten (Zeit, Akku, Netz), Animationen bei Änderungen.
-- Pull-Down links/rechts mit Fingerfolge und Blur-Aufbau.
-- Benachrichtigungen: Gruppen, Aufklappen, Wisch-zum-Schließen. Echte Daten per `NotificationListenerService`, wenn erlaubt.
-- CC: Kachelraster, An/Aus-Animation, Stagger, Slider mit Icon-Morphing, Medienkarte (echt per `MediaSessionManager`), Verbindungskarte mit Long-Press, Bearbeiten-Modus mit Drag-and-Drop und Reflow.
-- Echte Schalter, wo die API es erlaubt (Taschenlampe, Nicht stören, Helligkeit, Lautstärke, Rotation). Alles andere öffnet das System-Panel (siehe LIMITATIONS).
-- **Risiko:** Compose hat kein fertiges sortierbares Raster, Reflow wird selbst gebaut. Mehrere Blur-Ebenen gleichzeitig kosten Leistung bei 120 Hz.
+### Phase C – Statusleiste, Island-Benachrichtigungen, Benachrichtigungsleiste, Kontrollzentrum (15–22 PT)
+- Simulierte Statusleiste mit echten Daten. Island-Benachrichtigungen: erscheinen, zusammenziehen, expandieren, wegwischen, mehrere gleichzeitig.
+- Pull-Down-Zonen, fingerfolgender Blur-Aufbau, Karten-Stapel, „Alle löschen“.
+- Kontrollzentrum: rundes Raster, Zustandswechsel mit Icon-Morphing, Slider, Medien-, Verbindungs- und Geräte-Panel, Bearbeiten-Modus mit Drag, Resize und Reflow, Stagger, Multicolor.
+- Echte Daten und Schalter, wo die API es erlaubt (siehe LIMITATIONS).
+- **Risiken:** Compose hat kein sortier- und skalierbares Raster, es wird selbst gebaut. Mehrere Glas-Ebenen bei 120 Hz kosten Leistung.
 
-### Phase D – Launcher, Ordner, Schublade (20–30 PT)
-- Echter HOME-Launcher: `LauncherApps`, Icon-Rendering mit Maske, Seitenraster, Seitenwechsel, Indikator, Layout-Speicherung.
-- Drag-and-Drop über Seiten, Dock und Ordner, Wackel-Modus, App-Shortcuts-Menü, Benachrichtigungspunkte.
-- Ordner: Öffnen/Schließen als gemeinsamer Bounds-Übergang, Vorschau-Icons, Umbenennen, Seiten.
-- Schublade: Wisch-nach-oben, Suche, Kategorien, Buchstaben-Leiste.
-- Dock mit Blur, Widgets (`AppWidgetHost`, Binden, Konfigurieren, Skalieren).
-- App-Start/-Rückkehr für fremde Apps nur mit den Mitteln, die ein Drittanbieter-Launcher hat (siehe LIMITATIONS).
-- **Risiko:** Die größte Phase. Widgets sind klassische Views innerhalb von Compose und müssen trotzdem flüssig ziehbar sein. Das Gerät schränkt Drittanbieter-Launcher bei Gestennavigation eventuell ein, das muss auf dem Gerät geprüft werden.
+### Phase D – Launcher, Flux Home, Ordner, Schublade, Suche (25–35 PT)
+- Echter HOME-Launcher (`LauncherApps`, Shortcuts, `AppWidgetHost`, optional Icon-Packs). Seitenraster und Indikator.
+- Flux-Home-Resize mit Live-Reflow. Die Regeln werden aus den Aufnahmen abgeleitet.
+- Glas-Ordner (Öffnen/Schließen, Seiten, Umbenennen, große Formen), Drag-and-Drop mit Wackelmodus, Widgets, Dock, Suchleiste, Contour-Glow.
+- Schublade mit Alphabetleiste und Kategorien, Suche mit Ergebnisanimation.
+- App-Start über `ActivityOptions` plus Overlay-Animation im Launcher.
+- **Risiken:**
+  - Die größte Phase. Der Reflow-Algorithmus von Flux Home ist unbekannt und hat viele Sonderfälle.
+  - Widgets sind klassische Views innerhalb von Compose.
+  - Das Gerät schränkt Drittanbieter-Launcher eventuell ein ⚠.
 
-### Phase E – Recents und Übergänge (8–12 PT)
-- Kartenansicht, Wisch-zum-Schließen, „Alle löschen“, Kartenskalierung von/zur App, Schnellwechsel.
-- Damit die Übergänge 1:1 vorführbar sind, enthält die Demo-Shell 3–4 einfache Demo-Apps. Bei echten fremden Apps sind die Übergänge nicht steuerbar.
-- Zurück-Geste mit Vorschau (Predictive Back) innerhalb der Shell.
+### Phase E – Recents, Navigation, App-Übergänge, Predictive Back (10–15 PT)
+- Recents mit Kartenskalierung und Blur, Wegwischen, „Alle löschen“, Schnellwechsel.
+- Gesten-Leiste und Kapsel-Navigation mit Wechsel zwischen den Varianten, `PredictiveBackHandler`.
+- App-Übergänge aus Icon, Ordner und Recents: 1:1 mit Demo-Apps in der Shell, bei fremden Apps nur angenähert (siehe LIMITATIONS).
 
-### Phase F – Weitere Oberflächen, Feinschliff, Performance, Pixelvergleich (8–12 PT, Faltbar/Tablet optional +3–5 PT)
-- Lautstärke-Panel, Ausschalt-Menü, Einstellungs-Optik. Dazu ein Durchgang für Dark Mode, Schriftgrößen-Skalierung und Rotation.
-- Macrobenchmark und Perfetto auf dem Gerät, Überzeichnung beheben.
-- Abschließender Diff-Report über alle Hauptscreens. `LIMITATIONS.md` final.
+### Phase F – Restliche Oberflächen, Feinschliff, Performance, Gesamtvergleich (12–18 PT)
+- Lautstärke-Panel, Ausschalt-Menü, Tastatur-Übergänge, Rotation, optional Faltbar/Tablet (+3–5 PT).
+- `PERF.md` vom Gerät, Überzeichnung beheben, vollständiger `DIFF_REPORT.md` und `MOTION_REPORT.md`, `LIMITATIONS.md` final.
 
-### Phase G (optional) – Echte Systemintegration (10–20 PT, hohes Risiko)
-- Prototypen laut LIMITATIONS: Overlay-Lockscreen, Pull-Down per Accessibility-Overlay, Lautstärke-Panel per Accessibility, `TileService`.
-- LSPosed oder eigenes ROM nur auf ausdrücklichen Wunsch.
+### Phase G – Reale Systemintegration (nur nach deiner Freigabe, 10–25 PT, hohes Risiko)
+Prototypen laut `LIMITATIONS.md`: Accessibility-Overlay, `NotificationListenerService`, `TileService`, Overlay-Lockscreen, Device-Owner-Variante. LSPosed, eigenes ROM oder Systemapp nur auf ausdrücklichen Wunsch.
 
-**Summe A–F: ca. 60–90 PT.** „1:1“ ist für den In-App-Nachbau realistisch. Für eine echte Systemintegration ohne Root ist es das nicht.
+**Summe A–F: ca. 85–125 PT.** „1:1“ ist für den In-App-Nachbau realistisch. Für die echte Systemintegration ohne Root ist es das nicht, und das wird nirgends anders behauptet.
 
 ## Übergreifende Risiken
 
 | Risiko | Wirkung | Gegenmaßnahme |
 |---|---|---|
-| Lückenhafte oder komprimierte Referenz | Werte bleiben TODO oder werden ungenau | Checkliste und Aufnahme-Regeln in `reference/README.md`, nachfragen statt raten |
-| Versionswechsel des Originals | Spec veraltet | Version in der Meta-Tabelle festhalten, Referenz nur von einer Version |
-| Herstellerspezifischer Blur (Sättigung, Rauschen, Tönung) | Material wirkt anders | Mit Kalibrier-Wallpaper messen, `RenderEffect`-Kette aus Blur und Farbmatrix |
-| Leistung mehrerer Blur-Ebenen | Ruckeln bei 120 Hz | Einmal blurren und teilen, herunterskalierte Ebenen, Messung per Macrobenchmark |
-| Kein Gerät im Container | Performance und Haptik hier nicht prüfbar | Skripte zum Ausführen auf deinem Gerät, du schickst die Ergebnisse |
-| Rechtliches | Original-UI ist geschützt | Keine Assets, keine Marken. Referenzmaterial nur privat (Repo privat halten), nie in die APK |
+| Lückenhafte oder komprimierte Referenz | Werte bleiben TODO oder werden ungenau | ★-Set zuerst, Aufnahme-Regeln, nachfragen statt raten |
+| ColorOS 17 und Android 17 sind neu | Wenig öffentliche Information. Meine Kenntnis der Android-17-API-Änderungen ist begrenzt | Hypothesen nur nach Referenz übernehmen. API-Annahmen in Phase A gegen das aktuelle SDK prüfen |
+| Herstellerspezifisches Glas (Sättigung, Rauschen, Licht) | Material wirkt anders | Messung mit Kalibrier-Wallpaper, AGSL-Kette mit Parametern aus der Spec |
+| Leistung vieler Glas-Ebenen | Ruckeln bei 120 Hz | Einmal blurren und teilen, herunterskalierte Ebenen, Messung per Macrobenchmark |
+| Robolectric rendert Glas anders als ein Gerät | Diff für Glas unzuverlässig | Geometrie per Robolectric, Glas per Geräteaufnahme |
+| Kein Gerät im Container | Performance und Haptik hier nicht prüfbar | Skripte für dein Gerät, du schickst die Ergebnisse |
+| Umfang des Referenzmaterials (109 Dateien) | Hoher Aufwand für dich | Nach Phasen liefern, jeweils nur das nächste Set |
+| Rechtliches | Original-UI ist geschützt | Keine Assets, keine Marken, Referenz nur privat, nie in der APK |
 
 ## Was ich als Nächstes brauche
 
-1. **Referenzmaterial** nach [`reference/README.md`](reference/README.md). Für Phase A genügt das „Minimal-Set A“.
-2. **Gerät und Version** plus `adb shell wm size` / `adb shell wm density` (falls adb vorhanden, sonst Auflösung aus den Geräteinfos).
-3. **Netzwerk:** `dl.google.com` freigeben oder bestätigen, dass Builds nur über GitHub Actions laufen sollen.
-4. **Arbeitstitel und Paketname** der App, neutral. Vorschlag: Arbeitstitel „Shell“, Paket `app.shell.cos`. Beides ist später änderbar.
-5. **Entscheidung zu Phase G / LSPosed:** Jetzt nicht nötig, spätestens vor Phase F.
+1. **Das ★-Set** aus [`reference/INDEX.md`](reference/INDEX.md) (28 Dateien) für Phase A. Den Rest phasenweise.
+2. **Gerät und Build:** Kopfzeilen in `reference/INDEX.md` bzw. die Ausgabe von `adb shell wm size`, `wm density`, `getprop ro.build.display.id`.
+3. **Netzwerk:** `dl.google.com` freigeben oder entscheiden, dass Builds nur über GitHub Actions laufen.
+4. **Neutraler Arbeitstitel und Paketname.** Vorschlag: „Shell“, Paket `app.shell.fluid`.
+5. **Externe Bibliothek:** Ist Haze (Apache-2.0) als Abhängigkeit in Ordnung, falls es den Vergleich in Phase A gewinnt?
