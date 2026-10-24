@@ -1,6 +1,8 @@
 # Referenzmaterial
 
-Hier liegen Screenshots und Bildschirmaufnahmen von ColorOS 17. Alle Werte in [`DESIGN_SPEC.md`](../DESIGN_SPEC.md) und [`MOTION_TOKENS.md`](../MOTION_TOKENS.md) werden daraus gemessen. Das Material dient nur als private Referenz. Es wird nie Teil der App und das Repo bleibt privat.
+Hier liegen Screenshots und Bildschirmaufnahmen von ColorOS 17. Alle Werte in [`DESIGN_SPEC.md`](../DESIGN_SPEC.md) und [`MOTION_TOKENS.md`](../MOTION_TOKENS.md) werden daraus gemessen. Das Material dient nur als private Referenz und wird nie Teil der App.
+
+> **Das Repo ist öffentlich** (Stand 2026-10-24). Solange das so ist, werden Referenzbilder und -videos **nicht** committed. Ich werte sie aus, wenn du sie im Chat hochlädst. Ins Repo kommen nur die gemessenen Zahlen mit Quellenlink. Willst du das Material selbst ablegen, stell das Repo vorher auf privat.
 
 - **Woher das Material kommt:** Es gibt kein eigenes ColorOS-17-Gerät. Das Material stammt aus öffentlichen Quellen, siehe [`QUELLEN.md`](QUELLEN.md).
 - **Was fehlt:** steht pro Ordner in [`INDEX.md`](INDEX.md).

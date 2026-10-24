@@ -151,7 +151,8 @@ Prototypen laut `LIMITATIONS.md`: Accessibility-Overlay, `NotificationListenerSe
 | Robolectric rendert Glas anders als ein Gerät | Diff für Glas unzuverlässig | Geometrie per Robolectric, Glas per Geräteaufnahme |
 | Kein Gerät im Container | Performance und Haptik hier nicht prüfbar | Skripte für S22 Ultra und S25 FE, du schickst die Ergebnisse |
 | Umfang des Referenzmaterials (109 Einträge, gut 120 Dateien) | Hoher Aufwand für dich | Nach Phasen liefern, jeweils nur das nächste Set |
-| Rechtliches | Original-UI ist geschützt | Keine Assets, keine Marken, Referenz nur privat, nie in der APK |
+| Rechtliches | Original-UI ist geschützt | Keine Assets, keine Marken, nie in der APK. Das Repo ist öffentlich, deshalb werden Referenzdateien nicht committed, nur Messwerte mit Quellenlink |
+| Öffentlicher Debug-Schlüssel (`app/debug.keystore`) | Jeder kann eine APK mit derselben Signatur bauen, die sich über die installierte App legen ließe | Nur für Testbuilds. Für eine echte Veröffentlichung gibt es einen eigenen, geheimen Release-Schlüssel |
 
 ## Was ich als Nächstes brauche
 

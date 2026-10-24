@@ -44,4 +44,4 @@ Suche nach „ColorOS 17 hands-on“, „ColorOS 17 animations“ oder „ColorO
 
 ## Rechtlicher Hinweis
 
-Dieses Material ist urheberrechtlich geschützt. Es dient hier nur als private Mess-Referenz, bleibt in einem privaten Repo und kommt nie in die App.
+Dieses Material ist urheberrechtlich geschützt. Es dient hier nur als private Mess-Referenz und kommt nie in die App. Weil das Repo derzeit öffentlich ist, werden die Dateien nicht committed. Ins Repo kommen nur die gemessenen Werte mit Quellenlink.
