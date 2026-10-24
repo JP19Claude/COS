@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Shell</string>
+    <string name="gallery_title">Galerie</string>
+    <string name="gallery_note">Version 0.1 · Alle Maße, Farben und Animationen sind Platzhalter, bis Referenzmaterial vorliegt.</string>
+    <string name="tile_location">Standort</string>
+    <string name="tile_sound">Töne</string>
+    <string name="tile_lock">Sperre</string>
+    <string name="tile_favorite">Favorit</string>
+    <string name="slider_brightness">Helligkeit</string>
+    <string name="slider_volume">Lautstärke</string>
+    <string name="wallpaper_pick">Wallpaper wählen</string>
+    <string name="wallpaper_pick_summary">Bild aus der Galerie, z. B. dein Lieblings-Wallpaper</string>
+    <string name="wallpaper_reset">Platzhalter verwenden</string>
+    <string name="wallpaper_reset_summary">Eigener Farbverlauf der App</string>
+    <string name="demo_switch">Demo-Schalter</string>
+</resources>

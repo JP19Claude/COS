@@ -13,6 +13,13 @@ Alle Werte stehen in [`DESIGN_SPEC.md`](DESIGN_SPEC.md) und [`MOTION_TOKENS.md`]
 | 3 | Die Netzwerk-Richtlinie dieser Cloud-Umgebung sperrt `dl.google.com`. Erreichbar sind `maven.google.com` und Maven Central | Android SDK nicht installierbar, hier kein APK-Build | `dl.google.com` unter *Network access → Allowed domains* freigeben. Sonst Builds nur über GitHub Actions |
 | 4 | Kein KVM im Container | Kein Emulator hier | Screenshots und Frame-Strips per Roborazzi (JVM). Emulator-Läufe eventuell in GitHub Actions ⚠. Performance und Haptik misst du auf den Testgeräten |
 
+**Stand der App (2026-10-24): v0.1 Grundgerüst** auf Wunsch vorgezogen.
+- **Module:** `:app`, `:design-system`, `:glass` und `:common`.
+- **Galerie:** Glas-Panel mit Backdrop-Blur, runde Kacheln, Slider mit Rubber-Band, Schalter und Wallpaper-Auswahl.
+- **Werte:** Alle Werte sind Platzhalter (`@Unmeasured`), es gibt noch keine Referenz.
+- **Build:** über GitHub Actions (`.github/workflows/android.yml`), weil das SDK hier nicht installierbar ist.
+- **SDK-Version:** `compileSdk`/`targetSdk` 35 mit AGP 8.7.3. Hier lassen sich keine neueren Versionen prüfen. Hochziehen auf das aktuelle SDK folgt, sobald ein lokaler Build möglich ist.
+
 **Testgeräte:** Samsung Galaxy S22 Ultra und Galaxy S25 FE. Beide liegen über Min SDK 29. Mit Android 12 und neuer läuft dort echter Blur, mit Android 13 und neuer auch AGSL. Sie dienen für Installation, Performance, Gesten und Haptik. Als Design-Referenz dienen sie nicht. Herstellerabhängige ⚠-Punkte aus `LIMITATIONS.md` werden auf One UI geprüft, nicht auf ColorOS.
 
 ## Architektur

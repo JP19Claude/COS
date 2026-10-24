@@ -135,6 +135,7 @@ Alle Bewegungs-Tokens des Nachbaus. `MotionTokens.kt` wird hieraus befüllt. Jed
 | `unlockFlingVelocity` (dp/s) | — | `lockscreen/unlock_fling.mp4` | TODO: Referenz nötig |
 | `rubberBandLock` (Widerstand über Strecke) | — | `lockscreen/unlock_slow.mp4` | TODO: Referenz nötig |
 | `rubberBandHomeEdge` | — | `home/home_page_swipe.mp4` | TODO: Referenz nötig |
+| `rubberBandSlider` (Dehnen über das Slider-Ende, Grenze und Steigung) | — | `control-center/cc_brightness.mp4`, `control-center/cc_volume.mp4` | TODO: Referenz nötig |
 | `rubberBandOverscroll` (Listen, Sheets) | — | `system-panels/settings_scroll.mp4`, `system-panels/sheet.mp4` | TODO: Referenz nötig |
 | `shadeZoneSplit` (x-Grenze Benachrichtigungen / CC) | — | `statusbar-shade/shade_zones.mp4` | TODO: Referenz nötig |
 | `pullDownFollowFactor` (Finger → Inhalt) | — | `statusbar-shade/shade_pull_slow.mp4`, `control-center/cc_open_slow.mp4` | TODO: Referenz nötig |
