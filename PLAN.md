@@ -52,6 +52,11 @@ tools/            Python: Frame-Extraktion, Frame-Strips, Kurven-Fit, Pixel-/ΔE
   - Beim Loslassen läuft `animateTo()` mit der Geschwindigkeit aus dem `VelocityTracker`. Ein neuer Finger stoppt die laufende Animation und übernimmt sie ohne Sprung.
   - Schwellen, Rubber-Band und Snap-Ziele sind reines Kotlin mit JVM-Unit-Tests.
 - **Durchgehender Wallpaper-Übergang:** Eine gemeinsame Fortschrittsvariable steuert AOD → Lockscreen → Homescreen (Skalierung, Blur, Helligkeit, Position). Lockscreen und Launcher lesen sie beide, so bleibt es eine kontinuierliche Animation.
+- **Wallpaper (Entscheidung 2026-10-24):**
+  - Gewünscht ist das ColorOS-17-Wallpaper. Es ist proprietär und kommt deshalb nicht ins Projekt und nicht in die APK (Regel 1).
+  - Die App bringt einen eigenen, neutralen Platzhalter mit.
+  - In der App lässt sich jedes Bild aus der Galerie als Wallpaper wählen (Photo Picker, ohne Berechtigung). Das ColorOS-17-Wallpaper speicherst du selbst aufs Handy und wählst es dort aus.
+  - Die App behält eine Kopie, damit Glas, Live Clock und Tiefeneffekt damit funktionieren. Auf Wunsch setzt sie es auch als System-Wallpaper.
 - **Pixelvergleich (`DIFF_REPORT.md`):**
   - Roborazzi rendert jeden Zustand in einer Größe, die zur Bildbreite des Referenzbilds und zur Bezugsbreite `W_dp` passt.
   - App-seitig kommen die Element-Rahmen exakt aus Compose-`testTag`-Bounds, referenzseitig werden sie einmal pro Screen in JSON annotiert.
